@@ -42,6 +42,8 @@ private:
   ofxSelfOrganizingMap som;
 
   FluidSimulation fluidSimulation;
+  
+  std::vector<glm::vec4> points;
 
   std::vector<std::array<float, 2>> clusterSourceData;
   std::tuple<std::vector<std::array<float, 2>>, std::vector<uint32_t>> clusterResults;

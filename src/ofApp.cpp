@@ -29,8 +29,10 @@ void ofApp::setup(){
 }
 
 //--------------------------------------------------------------
-const int CLUSTER_CENTRES = 8; //14;
-const int CLUSTER_SAMPLES_MAX = 3000; // Note: 1600 raw samples per frame at 30fps
+const int CLUSTER_CENTRES = 15; //14;
+const int CLUSTER_SAMPLES_MAX = 4000; // Note: 1600 raw samples per frame at 30fps
+const float POINT_DECAY_RATE = 0.4;
+const float POINT_TOLERANCE = 1.0/50.0;
 
 void ofApp::update() {
   
@@ -53,7 +55,7 @@ void ofApp::update() {
       clusterSourceData.erase(clusterSourceData.end()-CLUSTER_SAMPLES_MAX, clusterSourceData.end());
     }
     clusterSourceData.push_back({ s, t });
-    introspection.addCircle(s, t, 1.0/Constants::WINDOW_WIDTH*5.0, ofColor::darkRed, true);
+    introspection.addCircle(s, t, 1.0/Constants::WINDOW_WIDTH*2.0, ofColor::darkRed, true); // introspection: red outline for raw cluster
     if (clusterSourceData.size() > CLUSTER_CENTRES) {
       dkm::clustering_parameters<float> params(CLUSTER_CENTRES);
       params.set_random_seed(1000); // keep clusters stable
@@ -66,6 +68,36 @@ void ofApp::update() {
     som.updateMap(instance);
     TS_STOP("update-som");
     
+    TS_START("update-points");
+    // w is age
+    // add to points from clusters
+    for (auto& cluster : std::get<0>(clusterResults)) {
+      float x = cluster[0]; float y = cluster[1];
+      auto it = std::find_if(points.begin(),
+                   points.end(),
+                   [x, y](const glm::vec4& p) {
+        return ((std::abs(p.x-x) < POINT_TOLERANCE) && (std::abs(p.y-y) < POINT_TOLERANCE));
+      });
+      if (it == points.end()) {
+        points.push_back(glm::vec4(x, y, 0.0, 1.0));
+        introspection.addCircle(x, y, 1.0/Constants::WINDOW_WIDTH*2.0, ofFloatColor(0.0, 0.0, 1.0, 1.0), true, 360); // introspection: blue is new point
+      } else {
+        it->w++;
+        introspection.addCircle(x, y, 1.0/Constants::WINDOW_WIDTH*2.0, ofFloatColor(1.0, 1.0, 0.0, 0.1), false, 600); // introspection: yellow is existing point
+      }
+    }
+    // age all points
+    for (auto& p: points) {
+      p.w -= POINT_DECAY_RATE;
+      if (p.w > 20.0) introspection.addCircle(p.x, p.y, 1.0/Constants::WINDOW_WIDTH*10.0, ofFloatColor(0.2, 1.0, 0.2, 1.0), true, 600); // green filled: longlived savedNote
+    }
+    // delete expired points
+    points.erase(std::remove_if(points.begin(),
+                                points.end(),
+                                [](const glm::vec4& n) { return n.w <=0; }),
+                 points.end());
+    TS_STOP("update-points");
+
   } //isDataValid()
   
   {
