@@ -32,14 +32,14 @@ void ofApp::setup(){
 }
 
 //--------------------------------------------------------------
-const int CLUSTER_CENTRES = 15; //14;
-const int CLUSTER_SAMPLES_MAX = 4000; // Note: 1600 raw samples per frame at 30fps
-const float POINT_DECAY_RATE = 0.4;
-const float POINT_TOLERANCE = 1.0/50.0;
+const int CLUSTER_CENTRES = 11; //14;
+const int CLUSTER_SAMPLES_MAX = 3000; // Note: 1600 raw samples per frame at 30fps
+const float POINT_DECAY_RATE = 0.2;
+const float POINT_TOLERANCE = 1.0/40.0;
 
 // y = mx + b
 float yForLineAtX(float x, float x1, float y1, float x2, float y2) {
-  float m = (x2 - x1) / (y2 - y1);
+  float m = (y2 - y1) / (x2 - x1);
   float b = y1 - (m * x1);
   return m * x + b;
 }
@@ -121,19 +121,34 @@ void ofApp::update() {
                    points.end());
     }
     TS_STOP("update-points");
+    
+    // temp draw on the fluid values layer: needs to be a shader that paints a circlar arc edge with smooth edges at some radius
+    for (auto& p: points) {
+      if (p.w < 10.0) continue;
+      fluidSimulation.getFlowValuesFbo().getSource().begin();
+      ofEnableBlendMode(OF_BLENDMODE_ADD);
+      ofNoFill();
+      ofSetColor(ofFloatColor(0.1, 0.1, 0.1, 0.3));
+      ofDrawCircle(p.x * Constants::FLUID_WIDTH, p.y * Constants::FLUID_HEIGHT, u * 100.0); // p.w);
+      fluidSimulation.getFlowValuesFbo().getSource().end();
+    }
 
     TS_START("update-lines");
     // reverse sort points by age
     std::sort(points.begin(),
               points.end(),
               [](const glm::vec4& a, const glm::vec4& b) { return a.w > b.w; });
-    if (points.size() > 2 * MAX_LINES) {
-      for (size_t i = 0; i < MAX_LINES; i++) {
+    if (points.size() > 2*MAX_LINES) {
+      for (size_t i = 0; i < 2*MAX_LINES; i+=2) {
         glm::vec4 p1 = points[i*2]; glm::vec4 p2 = points[i*2+1];
-        lines[i] = extendedLine(p1.x, p1.y, p2.x, p2.y);
-        glm::vec2 ls { std::get<0>(lines[i]).x, std::get<0>(lines[i]).y };
-        glm::vec2 le { std::get<1>(lines[i]).x, std::get<1>(lines[i]).y };
-        introspection.addLine(ls.x, ls.y, le.x, le.y, ofFloatColor(1.0, 1.0, 0.2, 1.0));
+//        introspection.addCircle(p1.x, p1.y, 1.0/Constants::WINDOW_WIDTH*20.0, ofFloatColor(1.0, 0.0, 1.0, 1.0), false);
+//        introspection.addCircle(p2.x, p2.y, 1.0/Constants::WINDOW_WIDTH*15.0, ofFloatColor(1.0, 1.0, 0.0, 1.0), false);
+        auto line = extendedLine(p1.x, p1.y, p2.x, p2.y);
+        lines[i] = line;
+        glm::vec2 ls = std::get<0>(line); glm::vec2 le = std::get<1>(line);
+//        introspection.addCircle(ls.x, ls.y, 1.0/Constants::WINDOW_WIDTH*20.0, ofFloatColor(0.6, 0.6, 0.6, 1.0), false);
+//        introspection.addCircle(le.x, le.y, 1.0/Constants::WINDOW_WIDTH*15.0, ofFloatColor(0.6, 0.6, 0.6, 1.0), false);
+        introspection.addLine(ls.x, ls.y, le.x, le.y, ofFloatColor(1.0, 1.0, 1.0, 1.0));
       }
     }
     TS_STOP("update-lines");
@@ -152,7 +167,7 @@ void ofApp::update() {
         { x * Constants::FLUID_WIDTH, y * Constants::FLUID_HEIGHT },
         Constants::FLUID_WIDTH * 0.08, // radius
         { 0.0, 0.0 }, // velocity
-        0.00005, // radialVelocity
+        0.0002, // radialVelocity
         color,
         10.0 // temperature
       };
