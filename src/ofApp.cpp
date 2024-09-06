@@ -5,6 +5,7 @@
 #include "dkm.hpp"
 
 //--------------------------------------------------------------
+const size_t MAX_LINES = 3;
 void ofApp::setup(){
   ofSetVerticalSync(false);
   ofEnableAlphaBlending();
@@ -21,6 +22,8 @@ void ofApp::setup(){
   som.setup();
   
   fluidSimulation.setup({ Constants::FLUID_WIDTH, Constants::FLUID_HEIGHT });
+  
+  lines.resize(MAX_LINES);
 
   parameters.add(fluidSimulation.getParameterGroup());
   gui.setup(parameters);
@@ -33,6 +36,23 @@ const int CLUSTER_CENTRES = 15; //14;
 const int CLUSTER_SAMPLES_MAX = 4000; // Note: 1600 raw samples per frame at 30fps
 const float POINT_DECAY_RATE = 0.4;
 const float POINT_TOLERANCE = 1.0/50.0;
+
+// y = mx + b
+float yForLineAtX(float x, float x1, float y1, float x2, float y2) {
+  float m = (x2 - x1) / (y2 - y1);
+  float b = y1 - (m * x1);
+  return m * x + b;
+}
+//float xForLineAtY(float y, float x1, float y1, float x2, float y2) {
+//  float m = (x2 - x1) / (y2 - y1);
+//  float b = y1 - (m * x1);
+//  return (y - b) / m;
+//}
+
+// assume normalised coords
+std::tuple<glm::vec2, glm::vec2> extendedLine(float x1, float y1, float x2, float y2) {
+  return std::tuple<glm::vec2, glm::vec2> { {0.0, yForLineAtX(0.0, x1, y1, x2, y2)}, {1.0, yForLineAtX(1.0, x1, y1, x2, y2)} };
+}
 
 void ofApp::update() {
   
@@ -64,39 +84,59 @@ void ofApp::update() {
     TS_STOP("update-kmeans");
     
     TS_START("update-som");
-    double instance[3] = { static_cast<double>(s), static_cast<double>(t), static_cast<double>(v) };
-    som.updateMap(instance);
+    {
+      double instance[3] = { static_cast<double>(s), static_cast<double>(t), static_cast<double>(v) };
+      som.updateMap(instance);
+    }
     TS_STOP("update-som");
     
     TS_START("update-points");
-    // w is age
-    // add to points from clusters
-    for (auto& cluster : std::get<0>(clusterResults)) {
-      float x = cluster[0]; float y = cluster[1];
-      auto it = std::find_if(points.begin(),
-                   points.end(),
-                   [x, y](const glm::vec4& p) {
-        return ((std::abs(p.x-x) < POINT_TOLERANCE) && (std::abs(p.y-y) < POINT_TOLERANCE));
-      });
-      if (it == points.end()) {
-        points.push_back(glm::vec4(x, y, 0.0, 1.0));
-        introspection.addCircle(x, y, 1.0/Constants::WINDOW_WIDTH*2.0, ofFloatColor(0.0, 0.0, 1.0, 1.0), true, 360); // introspection: blue is new point
-      } else {
-        it->w++;
-        introspection.addCircle(x, y, 1.0/Constants::WINDOW_WIDTH*2.0, ofFloatColor(1.0, 1.0, 0.0, 0.1), false, 600); // introspection: yellow is existing point
+    {
+      // w is age
+      // add to points from clusters
+      for (auto& cluster : std::get<0>(clusterResults)) {
+        float x = cluster[0]; float y = cluster[1];
+        auto it = std::find_if(points.begin(),
+                               points.end(),
+                               [x, y](const glm::vec4& p) {
+          return ((std::abs(p.x-x) < POINT_TOLERANCE) && (std::abs(p.y-y) < POINT_TOLERANCE));
+        });
+        if (it == points.end()) {
+          points.push_back(glm::vec4(x, y, 0.0, 1.0));
+          introspection.addCircle(x, y, 1.0/Constants::WINDOW_WIDTH*2.0, ofFloatColor(0.0, 0.0, 1.0, 1.0), true, 360); // introspection: blue is new point
+        } else {
+          it->w++;
+          introspection.addCircle(x, y, 1.0/Constants::WINDOW_WIDTH*2.0, ofFloatColor(1.0, 1.0, 0.0, 0.1), false, 600); // introspection: yellow is existing point
+        }
+      }
+      // age all points
+      for (auto& p: points) {
+        p.w -= POINT_DECAY_RATE;
+        if (p.w > 10.0) introspection.addCircle(p.x, p.y, 1.0/Constants::WINDOW_WIDTH*10.0, ofFloatColor(0.2, 1.0, 0.2, 1.0), true, 600); // green filled: longlived savedNote
+      }
+      // delete expired points
+      points.erase(std::remove_if(points.begin(),
+                                  points.end(),
+                                  [](const glm::vec4& n) { return n.w <=0; }),
+                   points.end());
+    }
+    TS_STOP("update-points");
+
+    TS_START("update-lines");
+    // reverse sort points by age
+    std::sort(points.begin(),
+              points.end(),
+              [](const glm::vec4& a, const glm::vec4& b) { return a.w > b.w; });
+    if (points.size() > 2 * MAX_LINES) {
+      for (size_t i = 0; i < MAX_LINES; i++) {
+        glm::vec4 p1 = points[i*2]; glm::vec4 p2 = points[i*2+1];
+        lines[i] = extendedLine(p1.x, p1.y, p2.x, p2.y);
+        glm::vec2 ls { std::get<0>(lines[i]).x, std::get<0>(lines[i]).y };
+        glm::vec2 le { std::get<1>(lines[i]).x, std::get<1>(lines[i]).y };
+        introspection.addLine(ls.x, ls.y, le.x, le.y, ofFloatColor(1.0, 1.0, 0.2, 1.0));
       }
     }
-    // age all points
-    for (auto& p: points) {
-      p.w -= POINT_DECAY_RATE;
-      if (p.w > 20.0) introspection.addCircle(p.x, p.y, 1.0/Constants::WINDOW_WIDTH*10.0, ofFloatColor(0.2, 1.0, 0.2, 1.0), true, 600); // green filled: longlived savedNote
-    }
-    // delete expired points
-    points.erase(std::remove_if(points.begin(),
-                                points.end(),
-                                [](const glm::vec4& n) { return n.w <=0; }),
-                 points.end());
-    TS_STOP("update-points");
+    TS_STOP("update-lines");
 
   } //isDataValid()
   

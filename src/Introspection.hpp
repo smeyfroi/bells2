@@ -27,6 +27,14 @@ class Introspection {
     bool filled;
   };
   
+  class Line : public Shape {
+  public:
+    Line(float x_, float y_, float x2_, float y2_, ofColor color_, uint64_t lifetimeFrames_);
+    void draw() override;
+  private:
+    float x2, y2;
+  };
+
 public:
   Introspection();
 
@@ -35,6 +43,7 @@ public:
   bool keyPressed(int key);
 
   void addCircle(float x, float y, float r, ofColor color, bool filled, uint64_t lifetimeFrames=40);
+  void addLine(float x, float y, float x2, float y2, ofColor color, uint64_t lifetimeFrames=40);
   
 private:
   std::vector<std::unique_ptr<Introspection::Shape>> shapes;

@@ -44,6 +44,7 @@ private:
   FluidSimulation fluidSimulation;
   
   std::vector<glm::vec4> points;
+  std::vector<std::tuple<glm::vec2, glm::vec2>> lines;
 
   std::vector<std::array<float, 2>> clusterSourceData;
   std::tuple<std::vector<std::array<float, 2>>, std::vector<uint32_t>> clusterResults;
