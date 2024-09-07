@@ -22,8 +22,10 @@ void ofApp::setup(){
   som.setup();
   
   fluidSimulation.setup({ Constants::FLUID_WIDTH, Constants::FLUID_HEIGHT });
+  maskShader.load();
   
   lines.resize(MAX_LINES);
+  maskFbo.allocate(Constants::CANVAS_WIDTH, Constants::CANVAS_HEIGHT, GL_R8);
 
   parameters.add(fluidSimulation.getParameterGroup());
   gui.setup(parameters);
@@ -43,11 +45,11 @@ float yForLineAtX(float x, float x1, float y1, float x2, float y2) {
   float b = y1 - (m * x1);
   return m * x + b;
 }
-//float xForLineAtY(float y, float x1, float y1, float x2, float y2) {
-//  float m = (x2 - x1) / (y2 - y1);
-//  float b = y1 - (m * x1);
-//  return (y - b) / m;
-//}
+float xForLineAtY(float y, float x1, float y1, float x2, float y2) {
+  float m = (y2 - y1) / (x2 - x1);
+  float b = y1 - (m * x1);
+  return (y - b) / m;
+}
 
 // assume normalised coords
 std::tuple<glm::vec2, glm::vec2> extendedLine(float x1, float y1, float x2, float y2) {
@@ -121,18 +123,19 @@ void ofApp::update() {
                    points.end());
     }
     TS_STOP("update-points");
-    
-    // temp draw on the fluid values layer: needs to be a shader that paints a circlar arc edge with smooth edges at some radius
+
+    // draw circles into fluid layer
     for (auto& p: points) {
       if (p.w < 10.0) continue;
       fluidSimulation.getFlowValuesFbo().getSource().begin();
       ofEnableBlendMode(OF_BLENDMODE_ADD);
       ofNoFill();
       ofSetColor(ofFloatColor(0.1, 0.1, 0.1, 0.3));
-      ofDrawCircle(p.x * Constants::FLUID_WIDTH, p.y * Constants::FLUID_HEIGHT, u * 100.0); // p.w);
+      ofDrawCircle(p.x * Constants::FLUID_WIDTH, p.y * Constants::FLUID_HEIGHT, u * 100.0);
       fluidSimulation.getFlowValuesFbo().getSource().end();
     }
 
+    bool linesChanged = false;
     TS_START("update-lines");
     // reverse sort points by age
     std::sort(points.begin(),
@@ -144,15 +147,70 @@ void ofApp::update() {
 //        introspection.addCircle(p1.x, p1.y, 1.0/Constants::WINDOW_WIDTH*20.0, ofFloatColor(1.0, 0.0, 1.0, 1.0), false);
 //        introspection.addCircle(p2.x, p2.y, 1.0/Constants::WINDOW_WIDTH*15.0, ofFloatColor(1.0, 1.0, 0.0, 1.0), false);
         auto line = extendedLine(p1.x, p1.y, p2.x, p2.y);
-        lines[i] = line;
         glm::vec2 ls = std::get<0>(line); glm::vec2 le = std::get<1>(line);
-//        introspection.addCircle(ls.x, ls.y, 1.0/Constants::WINDOW_WIDTH*20.0, ofFloatColor(0.6, 0.6, 0.6, 1.0), false);
-//        introspection.addCircle(le.x, le.y, 1.0/Constants::WINDOW_WIDTH*15.0, ofFloatColor(0.6, 0.6, 0.6, 1.0), false);
-        introspection.addLine(ls.x, ls.y, le.x, le.y, ofFloatColor(1.0, 1.0, 1.0, 1.0));
+        auto oldLine = lines[i];
+        glm::vec2 oldls = std::get<0>(oldLine); glm::vec2 oldle = std::get<1>(oldLine);
+        if (ls != oldls || le != oldle) {
+          linesChanged = true;
+          lines[i] = line;
+          //        introspection.addCircle(ls.x, ls.y, 1.0/Constants::WINDOW_WIDTH*20.0, ofFloatColor(0.6, 0.6, 0.6, 1.0), false);
+          //        introspection.addCircle(le.x, le.y, 1.0/Constants::WINDOW_WIDTH*15.0, ofFloatColor(0.6, 0.6, 0.6, 1.0), false);
+          introspection.addLine(ls.x, ls.y, le.x, le.y, ofFloatColor(1.0, 1.0, 1.0, 1.0));
+        }
       }
     }
     TS_STOP("update-lines");
 
+    // update mask
+    if (linesChanged) {
+      maskFbo.begin();
+      ofClear(ofColor::black);
+      glEnable(GL_BLEND);
+      glBlendEquation(GL_FUNC_ADD);
+      glBlendFunc(GL_ONE_MINUS_DST_COLOR, GL_ZERO);
+      for (auto& line : lines) {
+        glm::vec2 p1 = std::get<0>(line); // x = 0.0
+        glm::vec2 p2 = std::get<1>(line); // x = 1.0
+        ofPath path;
+        path.moveTo(p1.x, p1.y);
+        path.lineTo(p2.x, p2.y);
+        path.lineTo(1.0, 1.0);
+        path.lineTo(0.0, 1.0);
+        path.close();
+        //      introspection.addCircle(p1.x, p1.y, 1.0/Constants::WINDOW_WIDTH*20.0, ofFloatColor(1.0, 0.0, 1.0, 0.5), true);
+        //      introspection.addCircle(p2.x, p2.y, 1.0/Constants::WINDOW_WIDTH*20.0, ofFloatColor(0.0, 1.0, 1.0, 0.5), true);
+        //      if (p1.y < 0.0) {
+        //        path.moveTo(p1.x, p1.y);
+        //        path.lineTo(p2.x, p2.y);
+        //        path.lineTo(1.0, 1.0);
+        //        path.lineTo(0.0, 1.0);
+        //        path.close();
+        //      } else if (p1.y > 1.0) {
+        //        path.moveTo(0.0, 0.0);
+        //        path.lineTo(p1.x, p1.y);
+        //        path.lineTo(xForLineAtY(0.0, p1.x, p1.y, p2.x, p2.y), 0.0);
+        //        path.lineTo(1.0, p2.y);
+        //        path.lineTo(1.0, 1.0);
+        //        path.lineTo(0.0, 1.0);
+        //        path.close();
+        //      } else {
+        //        path.moveTo(0.0, p1.y);
+        //        path.lineTo(xForLineAtY(1.0, p1.x, p1.y, p2.x, p2.y), 0.0);
+        //        path.lineTo(1.0, 1.0);
+        //        path.lineTo(0.0, 1.0);
+        //        path.close();
+        //      }
+        path.scale(maskFbo.getWidth(), maskFbo.getHeight());
+        path.setColor(ofColor::white);
+        path.draw();
+      }
+      maskFbo.end();
+      
+      ofLogNotice()<<"change "<<ofGetElapsedTimef();
+      ofPixels frozenPixels;
+      fluidSimulation.getFlowValuesFbo().getSource().getTexture().readToPixels(frozenPixels);
+      frozenFluid.allocate(frozenPixels);
+    }
   } //isDataValid()
   
   {
@@ -184,11 +242,17 @@ void ofApp::draw(){
   ofPushStyle();
   ofClear(0, 255);
   
+  // fluid and frozen fluid
   {
-    ofPushStyle();
     ofEnableBlendMode(OF_BLENDMODE_ALPHA);
-    fluidSimulation.draw(0, 0, Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT);
-    ofPopStyle();
+    ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 1.0));
+    maskShader.render(fluidSimulation.getFlowValuesFbo().getSource(), maskFbo, Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT, true);
+    if (frozenFluid.isAllocated()) {
+      ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 0.7));
+      maskShader.render(frozenFluid, maskFbo, Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT);
+    }
+    ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 0.3));
+    maskShader.render(fluidSimulation.getFlowValuesFbo().getSource(), maskFbo, Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT);
   }
   
   // introspection

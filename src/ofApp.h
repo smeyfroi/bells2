@@ -7,6 +7,7 @@
 #include "ofxAudioData.h"
 #include "FluidSimulation.h"
 #include "Introspection.hpp"
+#include "MaskShader.h"
 
 class ofApp : public ofBaseApp{
 
@@ -35,20 +36,23 @@ private:
   std::shared_ptr<ofxAudioData::Plots> audioDataPlotsPtr { std::make_shared<ofxAudioData::Plots>(audioDataProcessorPtr) };
   std::shared_ptr<ofxAudioData::SpectrumPlots> audioDataSpectrumPlotsPtr { std::make_shared<ofxAudioData::SpectrumPlots>(audioDataProcessorPtr) };
 
-  bool guiVisible { false };
-  ofxPanel gui;
-  ofParameterGroup parameters;
-
   ofxSelfOrganizingMap som;
 
   FluidSimulation fluidSimulation;
+  ofTexture frozenFluid;
+  MaskShader maskShader;
   
   std::vector<glm::vec4> points;
   std::vector<std::tuple<glm::vec2, glm::vec2>> lines;
+  ofFbo maskFbo;
 
   std::vector<std::array<float, 2>> clusterSourceData;
   std::tuple<std::vector<std::array<float, 2>>, std::vector<uint32_t>> clusterResults;
   
   Introspection introspection; // we add things to this in normalised coords
+
+  bool guiVisible { false };
+  ofxPanel gui;
+  ofParameterGroup parameters;
 
 };
