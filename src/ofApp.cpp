@@ -22,10 +22,13 @@ void ofApp::setup(){
   som.setup();
   
   fluidSimulation.setup({ Constants::FLUID_WIDTH, Constants::FLUID_HEIGHT });
-  maskShader.load();
   
   lines.resize(MAX_LINES);
+  maskShader.load();
   maskFbo.allocate(Constants::CANVAS_WIDTH, Constants::CANVAS_HEIGHT, GL_R8);
+  
+  foregroundFbo.allocate(Constants::CANVAS_WIDTH, Constants::CANVAS_HEIGHT, GL_RGBA32F);
+  foregroundFbo.clearColorBuffer(ofFloatColor(0.0, 0.0, 0.0, 0.0));
 
   parameters.add(fluidSimulation.getParameterGroup());
   gui.setup(parameters);
@@ -66,11 +69,30 @@ void ofApp::update() {
   audioDataProcessorPtr->update();
   TS_STOP("update-audoanalysis");
 
+  // fade foreground
+  foregroundFbo.begin();
+  ofEnableBlendMode(OF_BLENDMODE_ALPHA);
+  ofSetColor(ofFloatColor(0.0, 0.0, 0.0, 0.3));
+  ofDrawRectangle(0.0, 0.0, foregroundFbo.getWidth(), foregroundFbo.getHeight());
+  foregroundFbo.end();
+
   if (audioDataProcessorPtr->isDataValid()) {
     float s = audioDataProcessorPtr->getNormalisedScalarValue(ofxAudioAnalysisClient::AnalysisScalar::pitch, 200.0, 1800.0);// 700.0, 1300.0);
     float t = audioDataProcessorPtr->getNormalisedScalarValue(ofxAudioAnalysisClient::AnalysisScalar::rootMeanSquare, 0.0, 4600.0); ////400.0, 4000.0, false);
     float u = audioDataProcessorPtr->getNormalisedScalarValue(ofxAudioAnalysisClient::AnalysisScalar::spectralKurtosis, 0.0, 25.0);
     float v = audioDataProcessorPtr->getNormalisedScalarValue(ofxAudioAnalysisClient::AnalysisScalar::spectralCentroid, 0.4, 6.0);
+
+    ofFloatColor somColor = somColorAt(s, t);
+    foregroundFbo.begin();
+    ofEnableBlendMode(OF_BLENDMODE_ALPHA);
+    ofSetColor(somColor);
+    ofDrawCircle(s*foregroundFbo.getWidth(), t*foregroundFbo.getHeight(), 1.0);
+    foregroundFbo.end();
+    fluidSimulation.getFlowValuesFbo().getSource().begin();
+    ofEnableBlendMode(OF_BLENDMODE_ALPHA);
+    ofSetColor(somColor);
+    ofDrawCircle(s*Constants::FLUID_WIDTH, t*Constants::FLUID_HEIGHT, 1.5);
+    fluidSimulation.getFlowValuesFbo().getSource().end();
     
     TS_START("update-kmeans");
     if (clusterSourceData.size() > CLUSTER_SAMPLES_MAX) {
@@ -155,7 +177,12 @@ void ofApp::update() {
           lines[i] = line;
           //        introspection.addCircle(ls.x, ls.y, 1.0/Constants::WINDOW_WIDTH*20.0, ofFloatColor(0.6, 0.6, 0.6, 1.0), false);
           //        introspection.addCircle(le.x, le.y, 1.0/Constants::WINDOW_WIDTH*15.0, ofFloatColor(0.6, 0.6, 0.6, 1.0), false);
-          introspection.addLine(ls.x, ls.y, le.x, le.y, ofFloatColor(1.0, 1.0, 1.0, 1.0));
+//          introspection.addLine(ls.x, ls.y, le.x, le.y, ofFloatColor(1.0, 1.0, 1.0, 1.0));
+          fluidSimulation.getFlowValuesFbo().getSource().begin();
+          ofEnableBlendMode(OF_BLENDMODE_ALPHA);
+          ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 1.0));
+          ofDrawLine(ls.x*Constants::FLUID_WIDTH, ls.y*Constants::FLUID_HEIGHT, le.x*Constants::FLUID_WIDTH, le.y*Constants::FLUID_HEIGHT);
+          fluidSimulation.getFlowValuesFbo().getSource().end();
         }
       }
     }
@@ -177,64 +204,54 @@ void ofApp::update() {
         path.lineTo(1.0, 1.0);
         path.lineTo(0.0, 1.0);
         path.close();
-        //      introspection.addCircle(p1.x, p1.y, 1.0/Constants::WINDOW_WIDTH*20.0, ofFloatColor(1.0, 0.0, 1.0, 0.5), true);
-        //      introspection.addCircle(p2.x, p2.y, 1.0/Constants::WINDOW_WIDTH*20.0, ofFloatColor(0.0, 1.0, 1.0, 0.5), true);
-        //      if (p1.y < 0.0) {
-        //        path.moveTo(p1.x, p1.y);
-        //        path.lineTo(p2.x, p2.y);
-        //        path.lineTo(1.0, 1.0);
-        //        path.lineTo(0.0, 1.0);
-        //        path.close();
-        //      } else if (p1.y > 1.0) {
-        //        path.moveTo(0.0, 0.0);
-        //        path.lineTo(p1.x, p1.y);
-        //        path.lineTo(xForLineAtY(0.0, p1.x, p1.y, p2.x, p2.y), 0.0);
-        //        path.lineTo(1.0, p2.y);
-        //        path.lineTo(1.0, 1.0);
-        //        path.lineTo(0.0, 1.0);
-        //        path.close();
-        //      } else {
-        //        path.moveTo(0.0, p1.y);
-        //        path.lineTo(xForLineAtY(1.0, p1.x, p1.y, p2.x, p2.y), 0.0);
-        //        path.lineTo(1.0, 1.0);
-        //        path.lineTo(0.0, 1.0);
-        //        path.close();
-        //      }
         path.scale(maskFbo.getWidth(), maskFbo.getHeight());
         path.setColor(ofColor::white);
         path.draw();
       }
       maskFbo.end();
       
-      ofLogNotice()<<"change "<<ofGetElapsedTimef();
       ofPixels frozenPixels;
       fluidSimulation.getFlowValuesFbo().getSource().getTexture().readToPixels(frozenPixels);
       frozenFluid.allocate(frozenPixels);
     }
-  } //isDataValid()
+  } //isDataValid()  
   
+  foregroundFbo.begin();
+  for (auto& line : lines) {
+    glm::vec2 p1 = std::get<0>(line); // x = 0.0
+    glm::vec2 p2 = std::get<1>(line); // x = 1.0
+    ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 1.0));
+    ofSetLineWidth(6);
+    ofDrawLine(p1.x*foregroundFbo.getWidth(), p1.y*foregroundFbo.getHeight(), p2.x*foregroundFbo.getWidth(), p2.y*foregroundFbo.getHeight());
+  }
+  foregroundFbo.end();
+
   {
-    TS_START("update-fluid");
+    TS_START("update-fluid-clusters");
     auto& clusterCentres = std::get<0>(clusterResults);
     for (auto& centre : clusterCentres) {
       float x = centre[0]; float y = centre[1];
-      double* somValue = som.getMapAt(x * Constants::SOM_WIDTH, y * Constants::SOM_HEIGHT);
       const float COL_FACTOR = 0.008;
-      ofFloatColor color = ofFloatColor(somValue[0], somValue[1], somValue[2], 0.005) * COL_FACTOR;
+      ofFloatColor color = somColorAt(x, y) * COL_FACTOR;
+      color.a = 0.005;
       FluidSimulation::Impulse impulse {
         { x * Constants::FLUID_WIDTH, y * Constants::FLUID_HEIGHT },
-        Constants::FLUID_WIDTH * 0.08, // radius
+        Constants::FLUID_WIDTH * 0.085, // radius
         { 0.0, 0.0 }, // velocity
-        0.0002, // radialVelocity
+        0.0003, // radialVelocity
         color,
         10.0 // temperature
       };
       fluidSimulation.applyImpulse(impulse);
     }
     fluidSimulation.update();
-    TS_STOP("update-fluid");
+    TS_STOP("update-fluid-clusters");
   }
+}
 
+ofFloatColor ofApp::somColorAt(float x, float y) const {
+  double* somValue = som.getMapAt(x * Constants::SOM_WIDTH, y * Constants::SOM_HEIGHT);
+  return ofFloatColor(somValue[0], somValue[1], somValue[2], 1.0);
 }
 
 //--------------------------------------------------------------
@@ -248,11 +265,18 @@ void ofApp::draw(){
     ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 1.0));
     maskShader.render(fluidSimulation.getFlowValuesFbo().getSource(), maskFbo, Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT, true);
     if (frozenFluid.isAllocated()) {
-      ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 0.7));
+      ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 0.8));
       maskShader.render(frozenFluid, maskFbo, Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT);
     }
     ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 0.3));
     maskShader.render(fluidSimulation.getFlowValuesFbo().getSource(), maskFbo, Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT);
+  }
+  
+  // foreground
+  {
+    ofEnableBlendMode(OF_BLENDMODE_ALPHA);
+    ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 1.0));
+    foregroundFbo.draw(0, 0, Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT);
   }
   
   // introspection

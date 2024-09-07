@@ -37,10 +37,13 @@ private:
   std::shared_ptr<ofxAudioData::SpectrumPlots> audioDataSpectrumPlotsPtr { std::make_shared<ofxAudioData::SpectrumPlots>(audioDataProcessorPtr) };
 
   ofxSelfOrganizingMap som;
+  ofFloatColor somColorAt(float x, float y) const;
 
   FluidSimulation fluidSimulation;
   ofTexture frozenFluid;
   MaskShader maskShader;
+  
+  ofFbo foregroundFbo;
   
   std::vector<glm::vec4> points;
   std::vector<std::tuple<glm::vec2, glm::vec2>> lines;
