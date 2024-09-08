@@ -85,13 +85,14 @@ void ofApp::update() {
     ofFloatColor somColor = somColorAt(s, t);
     foregroundFbo.begin();
     ofEnableBlendMode(OF_BLENDMODE_ALPHA);
-    ofSetColor(somColor);
-    ofDrawCircle(s*foregroundFbo.getWidth(), t*foregroundFbo.getHeight(), 1.0);
+    ofSetColor(ofColor::white);
+//    ofSetColor(somColor);
+    ofDrawCircle(s*foregroundFbo.getWidth(), t*foregroundFbo.getHeight(), 3.0);
     foregroundFbo.end();
     fluidSimulation.getFlowValuesFbo().getSource().begin();
-    ofEnableBlendMode(OF_BLENDMODE_ALPHA);
+    ofEnableBlendMode(OF_BLENDMODE_ADD);
     ofSetColor(somColor);
-    ofDrawCircle(s*Constants::FLUID_WIDTH, t*Constants::FLUID_HEIGHT, 1.5);
+    ofDrawCircle(s*Constants::FLUID_WIDTH, t*Constants::FLUID_HEIGHT, 2.0);
     fluidSimulation.getFlowValuesFbo().getSource().end();
     
     TS_START("update-kmeans");
@@ -152,7 +153,7 @@ void ofApp::update() {
       fluidSimulation.getFlowValuesFbo().getSource().begin();
       ofEnableBlendMode(OF_BLENDMODE_ADD);
       ofNoFill();
-      ofSetColor(ofFloatColor(0.1, 0.1, 0.1, 0.3));
+      ofSetColor(ofFloatColor(0.1, 0.1, 0.1, 0.7));
       ofDrawCircle(p.x * Constants::FLUID_WIDTH, p.y * Constants::FLUID_HEIGHT, u * 100.0);
       fluidSimulation.getFlowValuesFbo().getSource().end();
     }

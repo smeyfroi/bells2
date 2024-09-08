@@ -1,9 +1,11 @@
 keyPressed()=1|1|0
+update-points=1|1|0
 draw()=1|1|0
 update-audoanalysis=1|1|0
+update-lines=1|1|0
 draw-introspection=1|1|0
 update-introspection=1|1|0
-update-fluid=1|1|0
+update-fluid-clusters=1|1|0
 update-som=1|1|0
 update-kmeans=1|1|0
 update()=1|1|0
