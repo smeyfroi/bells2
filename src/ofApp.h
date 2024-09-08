@@ -45,13 +45,13 @@ private:
   
   ofFbo foregroundFbo;
   
-  std::vector<glm::vec4> points;
+  std::vector<std::array<float, 2>> clusterSourceData;
+  std::tuple<std::vector<std::array<float, 2>>, std::vector<uint32_t>> clusterResults;
+  std::vector<glm::vec4> points; // cluster centres
+  
   std::vector<std::tuple<glm::vec2, glm::vec2>> lines;
   ofFbo maskFbo;
 
-  std::vector<std::array<float, 2>> clusterSourceData;
-  std::tuple<std::vector<std::array<float, 2>>, std::vector<uint32_t>> clusterResults;
-  
   Introspection introspection; // we add things to this in normalised coords
 
   bool guiVisible { false };

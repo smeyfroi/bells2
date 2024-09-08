@@ -53,7 +53,6 @@ float xForLineAtY(float y, float x1, float y1, float x2, float y2) {
   float b = y1 - (m * x1);
   return (y - b) / m;
 }
-
 // assume normalised coords
 std::tuple<glm::vec2, glm::vec2> extendedLine(float x1, float y1, float x2, float y2) {
   return std::tuple<glm::vec2, glm::vec2> { {0.0, yForLineAtX(0.0, x1, y1, x2, y2)}, {1.0, yForLineAtX(1.0, x1, y1, x2, y2)} };
@@ -85,13 +84,14 @@ void ofApp::update() {
     ofFloatColor somColor = somColorAt(s, t);
     foregroundFbo.begin();
     ofEnableBlendMode(OF_BLENDMODE_ALPHA);
-    ofSetColor(ofColor::white);
+    ofSetColor(ofColor::black);
 //    ofSetColor(somColor);
     ofDrawCircle(s*foregroundFbo.getWidth(), t*foregroundFbo.getHeight(), 3.0);
     foregroundFbo.end();
     fluidSimulation.getFlowValuesFbo().getSource().begin();
-    ofEnableBlendMode(OF_BLENDMODE_ADD);
-    ofSetColor(somColor);
+    ofEnableBlendMode(OF_BLENDMODE_ALPHA);
+    ofSetColor(ofColor::black);
+//    ofSetColor(somColor);
     ofDrawCircle(s*Constants::FLUID_WIDTH, t*Constants::FLUID_HEIGHT, 2.0);
     fluidSimulation.getFlowValuesFbo().getSource().end();
     
@@ -147,9 +147,9 @@ void ofApp::update() {
     }
     TS_STOP("update-points");
 
-    // draw circles into fluid layer
+    // draw circles around older points into fluid layer
     for (auto& p: points) {
-      if (p.w < 10.0) continue;
+      if (p.w < 5.0) continue;
       fluidSimulation.getFlowValuesFbo().getSource().begin();
       ofEnableBlendMode(OF_BLENDMODE_ADD);
       ofNoFill();
@@ -158,6 +158,16 @@ void ofApp::update() {
       fluidSimulation.getFlowValuesFbo().getSource().end();
     }
 
+    // For lines:
+    // - find line ends that are still valid and leave them
+    // - find line ends that are invalid and find a nearby point to connect
+    // -   for invalid ends that have no replacement, remove the line
+    // - add new lines to fill quota
+
+    // Also: make lines that are close to the edges of 0.0,1.0
+    
+    // Keep an age attached to lines so the drawn line and mask can fade in and out
+    
     bool linesChanged = false;
     TS_START("update-lines");
     // reverse sort points by age
@@ -202,8 +212,8 @@ void ofApp::update() {
         ofPath path;
         path.moveTo(p1.x, p1.y);
         path.lineTo(p2.x, p2.y);
-        path.lineTo(1.0, 1.0);
-        path.lineTo(0.0, 1.0);
+        path.lineTo(1.0, 0.0);
+        path.lineTo(0.0, 0.0);
         path.close();
         path.scale(maskFbo.getWidth(), maskFbo.getHeight());
         path.setColor(ofColor::white);
