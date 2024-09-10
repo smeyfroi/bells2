@@ -8,6 +8,7 @@
 #include "FluidSimulation.h"
 #include "Introspection.hpp"
 #include "MaskShader.h"
+#include "Divider.hpp"
 
 class ofApp : public ofBaseApp{
 
@@ -41,7 +42,6 @@ private:
 
   FluidSimulation fluidSimulation;
   ofTexture frozenFluid;
-  MaskShader maskShader;
   
   ofFbo foregroundFbo;
   
@@ -49,8 +49,8 @@ private:
   std::tuple<std::vector<std::array<float, 2>>, std::vector<uint32_t>> clusterResults;
   std::vector<glm::vec4> points; // cluster centres
   
-  std::vector<std::tuple<glm::vec2, glm::vec2>> lines;
-  ofFbo maskFbo;
+  Divider divider { 7 };
+  MaskShader maskShader;
 
   Introspection introspection; // we add things to this in normalised coords
 

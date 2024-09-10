@@ -5,7 +5,7 @@
 #include "dkm.hpp"
 
 //--------------------------------------------------------------
-const size_t MAX_LINES = 3;
+const size_t MAX_LINES = 21;
 void ofApp::setup(){
   ofSetVerticalSync(false);
   ofEnableAlphaBlending();
@@ -23,9 +23,7 @@ void ofApp::setup(){
   
   fluidSimulation.setup({ Constants::FLUID_WIDTH, Constants::FLUID_HEIGHT });
   
-  lines.resize(MAX_LINES);
   maskShader.load();
-  maskFbo.allocate(Constants::CANVAS_WIDTH, Constants::CANVAS_HEIGHT, GL_R8);
   
   foregroundFbo.allocate(Constants::CANVAS_WIDTH, Constants::CANVAS_HEIGHT, GL_RGBA32F);
   foregroundFbo.clearColorBuffer(ofFloatColor(0.0, 0.0, 0.0, 0.0));
@@ -41,22 +39,6 @@ const int CLUSTER_CENTRES = 11; //14;
 const int CLUSTER_SAMPLES_MAX = 3000; // Note: 1600 raw samples per frame at 30fps
 const float POINT_DECAY_RATE = 0.2;
 const float POINT_TOLERANCE = 1.0/40.0;
-
-// y = mx + b
-float yForLineAtX(float x, float x1, float y1, float x2, float y2) {
-  float m = (y2 - y1) / (x2 - x1);
-  float b = y1 - (m * x1);
-  return m * x + b;
-}
-float xForLineAtY(float y, float x1, float y1, float x2, float y2) {
-  float m = (y2 - y1) / (x2 - x1);
-  float b = y1 - (m * x1);
-  return (y - b) / m;
-}
-// assume normalised coords
-std::tuple<glm::vec2, glm::vec2> extendedLine(float x1, float y1, float x2, float y2) {
-  return std::tuple<glm::vec2, glm::vec2> { {0.0, yForLineAtX(0.0, x1, y1, x2, y2)}, {1.0, yForLineAtX(1.0, x1, y1, x2, y2)} };
-}
 
 void ofApp::update() {
   
@@ -168,72 +150,31 @@ void ofApp::update() {
     
     // Keep an age attached to lines so the drawn line and mask can fade in and out
     
-    bool linesChanged = false;
     TS_START("update-lines");
-    // reverse sort points by age
-    std::sort(points.begin(),
-              points.end(),
-              [](const glm::vec4& a, const glm::vec4& b) { return a.w > b.w; });
-    if (points.size() > 2*MAX_LINES) {
-      for (size_t i = 0; i < 2*MAX_LINES; i+=2) {
-        glm::vec4 p1 = points[i*2]; glm::vec4 p2 = points[i*2+1];
-//        introspection.addCircle(p1.x, p1.y, 1.0/Constants::WINDOW_WIDTH*20.0, ofFloatColor(1.0, 0.0, 1.0, 1.0), false);
-//        introspection.addCircle(p2.x, p2.y, 1.0/Constants::WINDOW_WIDTH*15.0, ofFloatColor(1.0, 1.0, 0.0, 1.0), false);
-        auto line = extendedLine(p1.x, p1.y, p2.x, p2.y);
-        glm::vec2 ls = std::get<0>(line); glm::vec2 le = std::get<1>(line);
-        auto oldLine = lines[i];
-        glm::vec2 oldls = std::get<0>(oldLine); glm::vec2 oldle = std::get<1>(oldLine);
-        if (ls != oldls || le != oldle) {
-          linesChanged = true;
-          lines[i] = line;
-          //        introspection.addCircle(ls.x, ls.y, 1.0/Constants::WINDOW_WIDTH*20.0, ofFloatColor(0.6, 0.6, 0.6, 1.0), false);
-          //        introspection.addCircle(le.x, le.y, 1.0/Constants::WINDOW_WIDTH*15.0, ofFloatColor(0.6, 0.6, 0.6, 1.0), false);
-//          introspection.addLine(ls.x, ls.y, le.x, le.y, ofFloatColor(1.0, 1.0, 1.0, 1.0));
-          fluidSimulation.getFlowValuesFbo().getSource().begin();
-          ofEnableBlendMode(OF_BLENDMODE_ALPHA);
-          ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 1.0));
-          ofDrawLine(ls.x*Constants::FLUID_WIDTH, ls.y*Constants::FLUID_HEIGHT, le.x*Constants::FLUID_WIDTH, le.y*Constants::FLUID_HEIGHT);
-          fluidSimulation.getFlowValuesFbo().getSource().end();
+    bool dividerChanged = divider.update(points);
+    if (dividerChanged) {
+      fluidSimulation.getFlowValuesFbo().getSource().begin();
+      ofEnableBlendMode(OF_BLENDMODE_ALPHA);
+      ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 1.0));
+      for(auto& divisionLine : divider.getDivisionLines()) {
+        if (divisionLine.age < 1) {
+          ofDrawLine(divisionLine.x1*Constants::FLUID_WIDTH, divisionLine.y1*Constants::FLUID_HEIGHT, divisionLine.x2*Constants::FLUID_WIDTH, divisionLine.y2*Constants::FLUID_HEIGHT);
         }
       }
-    }
-    TS_STOP("update-lines");
-
-    // update mask
-    if (linesChanged) {
-      maskFbo.begin();
-      ofClear(ofColor::black);
-      glEnable(GL_BLEND);
-      glBlendEquation(GL_FUNC_ADD);
-      glBlendFunc(GL_ONE_MINUS_DST_COLOR, GL_ZERO);
-      for (auto& line : lines) {
-        glm::vec2 p1 = std::get<0>(line); // x = 0.0
-        glm::vec2 p2 = std::get<1>(line); // x = 1.0
-        ofPath path;
-        path.moveTo(p1.x, p1.y);
-        path.lineTo(p2.x, p2.y);
-        path.lineTo(1.0, 0.0);
-        path.lineTo(0.0, 0.0);
-        path.close();
-        path.scale(maskFbo.getWidth(), maskFbo.getHeight());
-        path.setColor(ofColor::white);
-        path.draw();
-      }
-      maskFbo.end();
+      fluidSimulation.getFlowValuesFbo().getSource().end();
       
       ofPixels frozenPixels;
       fluidSimulation.getFlowValuesFbo().getSource().getTexture().readToPixels(frozenPixels);
       frozenFluid.allocate(frozenPixels);
     }
+    TS_STOP("update-lines");
   } //isDataValid()  
   
   foregroundFbo.begin();
-  for (auto& line : lines) {
-    glm::vec2 p1 = std::get<0>(line); // x = 0.0
-    glm::vec2 p2 = std::get<1>(line); // x = 1.0
+  for(auto& divisionLine : divider.getDivisionLines()) {
     ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 1.0));
     ofSetLineWidth(6);
-    ofDrawLine(p1.x*foregroundFbo.getWidth(), p1.y*foregroundFbo.getHeight(), p2.x*foregroundFbo.getWidth(), p2.y*foregroundFbo.getHeight());
+    ofDrawLine(divisionLine.x1*foregroundFbo.getWidth(), divisionLine.y1*foregroundFbo.getHeight(), divisionLine.x2*foregroundFbo.getWidth(), divisionLine.y2*foregroundFbo.getHeight());
   }
   foregroundFbo.end();
 
@@ -274,13 +215,13 @@ void ofApp::draw(){
   {
     ofEnableBlendMode(OF_BLENDMODE_ALPHA);
     ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 1.0));
-    maskShader.render(fluidSimulation.getFlowValuesFbo().getSource(), maskFbo, Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT, true);
+    maskShader.render(fluidSimulation.getFlowValuesFbo().getSource(), divider.getMaskFbo(), Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT, true);
     if (frozenFluid.isAllocated()) {
       ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 0.8));
-      maskShader.render(frozenFluid, maskFbo, Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT);
+      maskShader.render(frozenFluid, divider.getMaskFbo(), Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT);
     }
     ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 0.3));
-    maskShader.render(fluidSimulation.getFlowValuesFbo().getSource(), maskFbo, Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT);
+    maskShader.render(fluidSimulation.getFlowValuesFbo().getSource(), divider.getMaskFbo(), Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT);
   }
   
   // foreground
