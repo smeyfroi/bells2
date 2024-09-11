@@ -24,7 +24,6 @@ Divider::Divider(int divisions_) :
   divisions(divisions_)
 {
   lines.resize(divisions_);
-  maskFbo.allocate(Constants::CANVAS_WIDTH, Constants::CANVAS_HEIGHT, GL_R8);
 }
 
 bool Divider::update(std::vector<glm::vec4>& points) {
@@ -47,27 +46,6 @@ bool Divider::update(std::vector<glm::vec4>& points) {
         lines[i] = DivisionLine(ls.x, ls.y, le.x, le.y);
       }
     }
-  }
-  
-  // update mask
-  if (linesChanged) {
-    maskFbo.begin();
-    ofClear(ofColor::black);
-    glEnable(GL_BLEND);
-    glBlendEquation(GL_FUNC_ADD);
-    glBlendFunc(GL_ONE_MINUS_DST_COLOR, GL_ZERO);
-    for (auto& line : lines) {
-      ofPath path;
-      path.moveTo(line.x1, line.y1);
-      path.lineTo(line.x2, line.y2);
-      path.lineTo(1.0, 0.0);
-      path.lineTo(0.0, 0.0);
-      path.close();
-      path.scale(maskFbo.getWidth(), maskFbo.getHeight());
-      path.setColor(ofColor::white);
-      path.draw();
-    }
-    maskFbo.end();
   }
 
   return linesChanged;

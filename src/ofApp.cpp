@@ -23,6 +23,7 @@ void ofApp::setup(){
   
   fluidSimulation.setup({ Constants::FLUID_WIDTH, Constants::FLUID_HEIGHT });
   
+  maskFbo.allocate(Constants::CANVAS_WIDTH, Constants::CANVAS_HEIGHT, GL_R8);
   maskShader.load();
   
   foregroundFbo.allocate(Constants::CANVAS_WIDTH, Constants::CANVAS_HEIGHT, GL_RGBA32F);
@@ -157,15 +158,34 @@ void ofApp::update() {
       ofEnableBlendMode(OF_BLENDMODE_ALPHA);
       ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 1.0));
       for(auto& divisionLine : divider.getDivisionLines()) {
-        if (divisionLine.age < 1) {
+//        if (divisionLine.age < 1) {
           ofDrawLine(divisionLine.x1*Constants::FLUID_WIDTH, divisionLine.y1*Constants::FLUID_HEIGHT, divisionLine.x2*Constants::FLUID_WIDTH, divisionLine.y2*Constants::FLUID_HEIGHT);
-        }
+//        }
       }
       fluidSimulation.getFlowValuesFbo().getSource().end();
       
       ofPixels frozenPixels;
       fluidSimulation.getFlowValuesFbo().getSource().getTexture().readToPixels(frozenPixels);
       frozenFluid.allocate(frozenPixels);
+      
+      // update mask
+      maskFbo.begin();
+      ofClear(ofColor::black);
+      glEnable(GL_BLEND);
+      glBlendEquation(GL_FUNC_ADD);
+      glBlendFunc(GL_ONE_MINUS_DST_COLOR, GL_ZERO);
+      for (auto& line : divider.getDivisionLines()) {
+        ofPath path;
+        path.moveTo(line.x1, line.y1);
+        path.lineTo(line.x2, line.y2);
+        path.lineTo(1.0, 0.0);
+        path.lineTo(0.0, 0.0);
+        path.close();
+        path.scale(maskFbo.getWidth(), maskFbo.getHeight());
+        path.setColor(ofColor::white);
+        path.draw();
+      }
+      maskFbo.end();
     }
     TS_STOP("update-lines");
   } //isDataValid()  
@@ -215,13 +235,14 @@ void ofApp::draw(){
   {
     ofEnableBlendMode(OF_BLENDMODE_ALPHA);
     ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 1.0));
-    maskShader.render(fluidSimulation.getFlowValuesFbo().getSource(), divider.getMaskFbo(), Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT, true);
+    fluidSimulation.getFlowValuesFbo().getSource().draw(0.0, 0.0, Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT);
+//    maskShader.render(fluidSimulation.getFlowValuesFbo().getSource(), maskFbo, Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT, true);
     if (frozenFluid.isAllocated()) {
-      ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 0.8));
-      maskShader.render(frozenFluid, divider.getMaskFbo(), Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT);
+      ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 0.9));
+      maskShader.render(frozenFluid, maskFbo, Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT);
     }
-    ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 0.3));
-    maskShader.render(fluidSimulation.getFlowValuesFbo().getSource(), divider.getMaskFbo(), Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT);
+//    ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 0.3));
+//    maskShader.render(fluidSimulation.getFlowValuesFbo().getSource(), maskFbo, Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT);
   }
   
   // foreground

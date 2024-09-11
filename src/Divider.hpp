@@ -17,7 +17,6 @@ class Divider {
 public:
   Divider(int divisions_);
   inline std::vector<DivisionLine>& getDivisionLines() { return lines; };
-  inline ofFbo& getMaskFbo() { return maskFbo; };
   
   // Return true when a change happened. Sorts the points vector.
   bool update(std::vector<glm::vec4>& points);
@@ -25,6 +24,5 @@ public:
 private:
   int divisions;
   std::vector<DivisionLine> lines;
-  ofFbo maskFbo;
 
 };

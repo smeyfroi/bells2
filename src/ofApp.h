@@ -50,6 +50,7 @@ private:
   std::vector<glm::vec4> points; // cluster centres
   
   Divider divider { 7 };
+  ofFbo maskFbo;
   MaskShader maskShader;
 
   Introspection introspection; // we add things to this in normalised coords
