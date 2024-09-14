@@ -71,12 +71,7 @@ bool Divider::isLineInLines(const DivisionLine& line) const {
                      [&](const auto& l) { return line.isEqual(l); });
 }
 
-// Eligible if:
-// - start and end points outside DIFF_TOLERANCE
-// - start or end X within EDGE_TOLERANCE
-// - start or end Y within EDGE_TOLERANCE
-constexpr float EDGE_TOLERANCE = 1.0 / 5.0;
-
+//constexpr float EDGE_TOLERANCE = 1.0 / 5.0;
 bool Divider::isLineEligible(const DivisionLine& line) const {
   if (!line.isValid()) return false;
   if (isLineInLines(line)) return false;
@@ -119,20 +114,28 @@ bool Divider::update(std::vector<glm::vec4>& points) {
 //  std::sort(points.begin(),
 //            points.end(),
 //            [](const glm::vec4& a, const glm::vec4& b) { return a.w > b.w; });
-  
+
   // find new divisions to replace any invalid ones
+  if (points.size() < 3) return linesChanged;
   for (auto& line : lines) {
     if (line.isValid()) continue;
-    for (auto iter1 = points.begin(); iter1 != points.end(); iter1++) {
-      glm::vec4 p1 = *iter1;
-      for (auto iter2 = iter1+1; iter2 != points.end(); iter2++) {
-        glm::vec4 p2 = *iter2;
-        DivisionLine newLine { p1.x, p1.y, p2.x, p2.y };
-        if (!isLineEligible(newLine)) continue;
-        line = newLine;
-        linesChanged = true;
-      }
-    }
+    glm::vec4 p1 = points[ofRandom(points.size())];
+    glm::vec4 p2 = points[ofRandom(points.size())];
+    DivisionLine newLine { p1.x, p1.y, p2.x, p2.y };
+    if (!isLineEligible(newLine)) continue;
+    line = newLine;
+    linesChanged = true;
   }
+//    for (auto iter1 = points.begin(); iter1 != points.end(); iter1++) {
+//      glm::vec4 p1 = *iter1;
+//      for (auto iter2 = iter1+1; iter2 != points.end(); iter2++) {
+//        glm::vec4 p2 = *iter2;
+//        DivisionLine newLine { p1.x, p1.y, p2.x, p2.y };
+//        if (!isLineEligible(newLine)) continue;
+//        line = newLine;
+//        linesChanged = true;
+//      }
+//    }
+//  }
   return linesChanged;
 }

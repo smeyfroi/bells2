@@ -47,9 +47,9 @@ private:
   
   std::vector<std::array<float, 2>> clusterSourceData;
   std::tuple<std::vector<std::array<float, 2>>, std::vector<uint32_t>> clusterResults;
-  std::vector<glm::vec4> points; // cluster centres
+  std::vector<glm::vec4> clusterCentres;
   
-  Divider divider { 7 };
+  Divider divider { 5 };
   ofFbo maskFbo;
   MaskShader maskShader;
 

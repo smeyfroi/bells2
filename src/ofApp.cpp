@@ -5,12 +5,12 @@
 #include "dkm.hpp"
 
 //--------------------------------------------------------------
-const size_t MAX_LINES = 21;
 void ofApp::setup(){
   ofSetVerticalSync(false);
   ofEnableAlphaBlending();
   ofDisableArbTex(); // required for texture2D to work in GLSL, makes texture coords normalized
   ofSetFrameRate(Constants::FRAME_RATE);
+  ofSetCircleResolution(100);
   TIME_SAMPLE_SET_FRAMERATE(Constants::FRAME_RATE);
 
   double minInstance[3] = { 0.0, 0.0, 0.0 };
@@ -36,10 +36,10 @@ void ofApp::setup(){
 }
 
 //--------------------------------------------------------------
-const int CLUSTER_CENTRES = 11; //14;
-const int CLUSTER_SAMPLES_MAX = 3000; // Note: 1600 raw samples per frame at 30fps
-const float POINT_DECAY_RATE = 0.2;
-const float POINT_TOLERANCE = 1.0/40.0;
+const int NUM_CLUSTER_CENTRES = 14; //14;
+const int CLUSTER_SOURCE_SAMPLES_MAX = 3000; // Note: 1600 raw samples per frame at 30fps
+const float POINT_DECAY_RATE = 0.3;
+const float SAME_CLUSTER_TOLERANCE = 1.0/10.0;
 
 void ofApp::update() {
   
@@ -54,7 +54,7 @@ void ofApp::update() {
   // fade foreground
   foregroundFbo.begin();
   ofEnableBlendMode(OF_BLENDMODE_ALPHA);
-  ofSetColor(ofFloatColor(0.0, 0.0, 0.0, 0.3));
+  ofSetColor(ofFloatColor(0.0, 0.0, 0.0, 0.02));
   ofDrawRectangle(0.0, 0.0, foregroundFbo.getWidth(), foregroundFbo.getHeight());
   foregroundFbo.end();
 
@@ -63,33 +63,6 @@ void ofApp::update() {
     float t = audioDataProcessorPtr->getNormalisedScalarValue(ofxAudioAnalysisClient::AnalysisScalar::rootMeanSquare, 0.0, 4600.0); ////400.0, 4000.0, false);
     float u = audioDataProcessorPtr->getNormalisedScalarValue(ofxAudioAnalysisClient::AnalysisScalar::spectralKurtosis, 0.0, 25.0);
     float v = audioDataProcessorPtr->getNormalisedScalarValue(ofxAudioAnalysisClient::AnalysisScalar::spectralCentroid, 0.4, 6.0);
-
-    ofFloatColor somColor = somColorAt(s, t);
-    foregroundFbo.begin();
-    ofEnableBlendMode(OF_BLENDMODE_ALPHA);
-    ofSetColor(ofColor::black);
-//    ofSetColor(somColor);
-    ofDrawCircle(s*foregroundFbo.getWidth(), t*foregroundFbo.getHeight(), 3.0);
-    foregroundFbo.end();
-    fluidSimulation.getFlowValuesFbo().getSource().begin();
-    ofEnableBlendMode(OF_BLENDMODE_ALPHA);
-    ofSetColor(ofColor::black);
-//    ofSetColor(somColor);
-    ofDrawCircle(s*Constants::FLUID_WIDTH, t*Constants::FLUID_HEIGHT, 2.0);
-    fluidSimulation.getFlowValuesFbo().getSource().end();
-    
-    TS_START("update-kmeans");
-    if (clusterSourceData.size() > CLUSTER_SAMPLES_MAX) {
-      clusterSourceData.erase(clusterSourceData.end()-CLUSTER_SAMPLES_MAX, clusterSourceData.end());
-    }
-    clusterSourceData.push_back({ s, t });
-    introspection.addCircle(s, t, 1.0/Constants::WINDOW_WIDTH*2.0, ofColor::darkRed, true); // introspection: red outline for raw cluster
-    if (clusterSourceData.size() > CLUSTER_CENTRES) {
-      dkm::clustering_parameters<float> params(CLUSTER_CENTRES);
-      params.set_random_seed(1000); // keep clusters stable
-      clusterResults = dkm::kmeans_lloyd(clusterSourceData, params);
-    }
-    TS_STOP("update-kmeans");
     
     TS_START("update-som");
     {
@@ -97,73 +70,103 @@ void ofApp::update() {
       som.updateMap(instance);
     }
     TS_STOP("update-som");
-    
-    TS_START("update-points");
+
+    // Draw foreground mark for raw audio data sample in darkened saturated SOM color
+    ofFloatColor somColor = somColorAt(s, t);
+    ofFloatColor darkSomColor = somColor; darkSomColor.setBrightness(0.2); darkSomColor.setSaturation(1.0);
+    foregroundFbo.begin();
     {
-      // w is age
-      // add to points from clusters
+      ofEnableBlendMode(OF_BLENDMODE_DISABLED);
+      ofSetColor(darkSomColor);
+      ofDrawCircle(s*foregroundFbo.getWidth(), t*foregroundFbo.getHeight(), 10.0);
+    }
+    foregroundFbo.end();
+
+    // Draw fluid mark for raw audio data sample in darkened SOM color
+    fluidSimulation.getFlowValuesFbo().getSource().begin();
+    {
+      ofEnableBlendMode(OF_BLENDMODE_DISABLED);
+      ofSetColor(darkSomColor);
+      ofDrawCircle(s*Constants::FLUID_WIDTH, t*Constants::FLUID_HEIGHT, 3.0);
+    }
+    fluidSimulation.getFlowValuesFbo().getSource().end();
+    
+    TS_START("update-kmeans");
+    if (clusterSourceData.size() > CLUSTER_SOURCE_SAMPLES_MAX) {
+      clusterSourceData.erase(clusterSourceData.end() - CLUSTER_SOURCE_SAMPLES_MAX, clusterSourceData.end());
+    }
+    clusterSourceData.push_back({ s, t });
+    introspection.addCircle(s, t, 1.0/Constants::WINDOW_WIDTH*5.0, ofColor::grey, true, 30); // introspection: small grey circle for new raw source sample
+    if (clusterSourceData.size() > NUM_CLUSTER_CENTRES) {
+      dkm::clustering_parameters<float> params(NUM_CLUSTER_CENTRES);
+      params.set_random_seed(1000); // keep clusters stable
+      clusterResults = dkm::kmeans_lloyd(clusterSourceData, params);
+    }
+    TS_STOP("update-kmeans");
+    
+    TS_START("update-clusterCentres");
+    {
+      // glm::vec4 w is age
+      // add to clusterCentres from new clusters
       for (auto& cluster : std::get<0>(clusterResults)) {
         float x = cluster[0]; float y = cluster[1];
-        auto it = std::find_if(points.begin(),
-                               points.end(),
+        auto it = std::find_if(clusterCentres.begin(),
+                               clusterCentres.end(),
                                [x, y](const glm::vec4& p) {
-          return ((std::abs(p.x-x) < POINT_TOLERANCE) && (std::abs(p.y-y) < POINT_TOLERANCE));
+          return ((std::abs(p.x-x) < SAME_CLUSTER_TOLERANCE) && (std::abs(p.y-y) < SAME_CLUSTER_TOLERANCE));
         });
-        if (it == points.end()) {
-          points.push_back(glm::vec4(x, y, 0.0, 1.0));
-          introspection.addCircle(x, y, 1.0/Constants::WINDOW_WIDTH*2.0, ofFloatColor(0.0, 0.0, 1.0, 1.0), true, 360); // introspection: blue is new point
+        if (it == clusterCentres.end()) {
+          // don't have this clusterCentre so make it
+          clusterCentres.push_back(glm::vec4(x, y, 0.0, 1.0)); // start at age=1
+//          introspection.addCircle(x, y, 5.0*1.0/Constants::WINDOW_WIDTH, ofColor::red, true, 60); // introspection: small red circle is new cluster centre
         } else {
+          // existing cluster so add to its age to preserve it
           it->w++;
-          introspection.addCircle(x, y, 1.0/Constants::WINDOW_WIDTH*2.0, ofFloatColor(1.0, 1.0, 0.0, 0.1), false, 600); // introspection: yellow is existing point
+//          introspection.addCircle(it->x, it->y, 3.0*1.0/Constants::WINDOW_WIDTH, ofColor::yellow, false, 10); // introspection: small yellow circle is existing cluster centre that continues to exist
         }
       }
-      // age all points
-      for (auto& p: points) {
-        p.w -= POINT_DECAY_RATE;
-        if (p.w > 10.0) introspection.addCircle(p.x, p.y, 1.0/Constants::WINDOW_WIDTH*10.0, ofFloatColor(0.2, 1.0, 0.2, 1.0), true, 600); // green filled: longlived savedNote
-      }
-      // delete expired points
-      points.erase(std::remove_if(points.begin(),
-                                  points.end(),
-                                  [](const glm::vec4& n) { return n.w <=0; }),
-                   points.end());
     }
-    TS_STOP("update-points");
+    TS_STOP("update-clusterCentres");
 
-    // draw circles around older points into fluid layer
-    for (auto& p: points) {
+    // draw circles around longer-lasting clusterCentres into fluid layer
+    fluidSimulation.getFlowValuesFbo().getSource().begin();
+    ofEnableBlendMode(OF_BLENDMODE_ADD);
+    ofNoFill();
+    ofSetColor(ofFloatColor(0.1, 0.1, 0.1, 0.7));
+    for (auto& p: clusterCentres) {
       if (p.w < 5.0) continue;
-      fluidSimulation.getFlowValuesFbo().getSource().begin();
-      ofEnableBlendMode(OF_BLENDMODE_ADD);
-      ofNoFill();
-      ofSetColor(ofFloatColor(0.1, 0.1, 0.1, 0.7));
       ofDrawCircle(p.x * Constants::FLUID_WIDTH, p.y * Constants::FLUID_HEIGHT, u * 100.0);
-      fluidSimulation.getFlowValuesFbo().getSource().end();
     }
-
-    // For lines:
-    // - find line ends that are still valid and leave them
-    // - find line ends that are invalid and find a nearby point to connect
-    // -   for invalid ends that have no replacement, remove the line
-    // - add new lines to fill quota
-
-    // Also: make lines that are close to the edges of 0.0,1.0
+    fluidSimulation.getFlowValuesFbo().getSource().end();
     
-    // Keep an age attached to lines so the drawn line and mask can fade in and out
-    
-    TS_START("update-lines");
-    bool dividerChanged = divider.update(points);
+    // draw arcs around longer-lasting clusterCentres into foreground
+    foregroundFbo.begin();
+    ofEnableBlendMode(OF_BLENDMODE_ALPHA);
+    ofSetColor(ofFloatColor(0.0, 0.0, 0.0, 0.7));
+    ofNoFill();
+    for (auto& p: clusterCentres) {
+      if (p.w < 2.0) continue;
+      ofPolyline path;
+      path.arc(p.x * foregroundFbo.getWidth(), p.y * foregroundFbo.getHeight(), u * 300.0, u * 300.0, 0.0, 135.0);
+      path.draw();
+    }
+    foregroundFbo.end();
+
+    TS_START("update-divider");
+    bool dividerChanged = divider.update(clusterCentres);
     if (dividerChanged) {
       fluidSimulation.getFlowValuesFbo().getSource().begin();
       ofEnableBlendMode(OF_BLENDMODE_ALPHA);
       ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 0.5));
+      ofPushMatrix();
+      ofScale(Constants::FLUID_WIDTH);
+      const float lineWidth = 1.0 * 1.0 / Constants::FLUID_WIDTH;
       for(auto& divisionLine : divider.getDivisionLines()) {
-//        if (divisionLine.age < 1) {
-          ofDrawLine(divisionLine.x1*Constants::FLUID_WIDTH, divisionLine.y1*Constants::FLUID_HEIGHT, divisionLine.x2*Constants::FLUID_WIDTH, divisionLine.y2*Constants::FLUID_HEIGHT);
-//        }
+        divisionLine.draw(lineWidth);
       }
+      ofPopMatrix();
       fluidSimulation.getFlowValuesFbo().getSource().end();
-      
+
       ofPixels frozenPixels;
       fluidSimulation.getFlowValuesFbo().getSource().getTexture().readToPixels(frozenPixels);
       frozenFluid.allocate(frozenPixels);
@@ -187,19 +190,43 @@ void ofApp::update() {
       }
       maskFbo.end();
     }
-    TS_STOP("update-lines");
-  } //isDataValid()  
-  
-  foregroundFbo.begin();
-  ofSetColor(ofFloatColor(0.0, 0.0, 0.0, 1.0));
-  ofPushMatrix();
-  ofScale(foregroundFbo.getWidth());
-  const float lineWidth = 60.0 * 1.0 / foregroundFbo.getWidth();
-  for(auto& divisionLine : divider.getDivisionLines()) {
-    divisionLine.draw(lineWidth);
+    TS_STOP("update-divider");
+    
+  } //isDataValid()
+
+  {
+    TS_START("decay-clusterCentres");
+    // age all clusterCentres
+    for (auto& p: clusterCentres) {
+      p.w -= POINT_DECAY_RATE;
+      if (p.w > 5.0) {
+        introspection.addCircle(p.x, p.y, 10.0*1.0/Constants::WINDOW_WIDTH, ofColor::lightGreen, true, 60); // large lightGreen circle is long-lived clusterCentre
+      } else {
+        introspection.addCircle(p.x, p.y, 6.0*1.0/Constants::WINDOW_WIDTH, ofColor::darkOrange, true, 30); // small darkOrange circle is short-lived clusterCentre
+      }
+    }
+    // delete decayed clusterCentres
+    clusterCentres.erase(std::remove_if(
+                                        clusterCentres.begin(),
+                                        clusterCentres.end(),
+                                        [](const glm::vec4& n) { return n.w <=0; }),
+                         clusterCentres.end());
+    TS_STOP("decay-clusterCentres");
   }
-  ofPopMatrix();
-  foregroundFbo.end();
+  
+  // draw divisions on foreground
+  {
+    foregroundFbo.begin();
+    ofSetColor(ofFloatColor(0.0, 0.0, 0.0, 1.0));
+    ofPushMatrix();
+    ofScale(foregroundFbo.getWidth());
+    const float lineWidth = 60.0 * 1.0 / foregroundFbo.getWidth();
+    for(auto& divisionLine : divider.getDivisionLines()) {
+      divisionLine.draw(lineWidth);
+    }
+    ofPopMatrix();
+    foregroundFbo.end();
+  }
 
   {
     TS_START("update-fluid-clusters");

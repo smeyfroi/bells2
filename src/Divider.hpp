@@ -6,7 +6,7 @@
 #include "ofFbo.h"
 
 static constexpr float EPSILON = std::numeric_limits<float>::epsilon();
-const float CLOSE_TOLERANCE_SQUARED = std::pow(1.0 / 2.0, 2.0);
+const float CLOSE_TOLERANCE_SQUARED = std::pow(1.0 / 10.0, 2.0);
 
 // x1,y1 and x2,y2 are normalised coords; ref coords can be anything
 struct DivisionLine {
@@ -16,10 +16,15 @@ struct DivisionLine {
   float refX1, refY1, refX2, refY2;
   float x1, x2, y1, y2;
   inline bool isEqual(const DivisionLine& right) const {
-    return (std::abs(refX1-right.refX1) < EPSILON
+    return ((std::abs(refX1-right.refX1) < EPSILON
             && std::abs(refY1-right.refY1) < EPSILON
             && std::abs(refX2-right.refX2) < EPSILON
-            && std::abs(refY2-right.refY2) < EPSILON);
+            && std::abs(refY2-right.refY2) < EPSILON)
+            ||
+            (std::abs(refX2-right.refX1) < EPSILON
+            && std::abs(refY2-right.refY1) < EPSILON
+            && std::abs(refX1-right.refX2) < EPSILON
+            && std::abs(refY1-right.refY2) < EPSILON));
   }
   inline bool isRefPoint(float x, float y) const {
     return (std::abs(refX1-x) < EPSILON && std::abs(refY1-y) < EPSILON)
@@ -46,7 +51,7 @@ public:
   bool isLineEligible(const DivisionLine& line) const;
   DivisionLine findNewLineCloseTo(const std::vector<glm::vec4>& points, float x1, float y1, float x2, float y2) const;
 
-  // Return true when a change happened. Sorts the points vector.
+  // Return true when a change happened. May modify the points
   bool update(std::vector<glm::vec4>& points);
   
 private:
