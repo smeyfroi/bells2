@@ -27,6 +27,14 @@ bool DivisionLine::isValid() const {
   return (ofDist(refX1, refY1, refX2, refY2) > EPSILON);
 };
 
+void DivisionLine::draw(float width) const {
+  ofPushMatrix();
+  ofTranslate(x1, y1);
+  ofRotateRad(std::atan2((y2 - y1), (x2 - x1)));
+  ofDrawRectangle(-1.0, -width/2.0, ofDist(x1, y1, x2, y2)+1.0, width);
+  ofPopMatrix();
+}
+
 
 
 Divider::Divider(int divisions_) :

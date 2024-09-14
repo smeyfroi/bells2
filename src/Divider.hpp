@@ -26,6 +26,7 @@ struct DivisionLine {
       || (std::abs(refX2-x) < EPSILON && std::abs(refY2-y) < EPSILON);
   }
   bool isValid() const;
+  void draw(float width) const;
 };
 //bool operator == (const DivisionLine& left, const DivisionLine& right) {
 //  return (left.isEqual(right));

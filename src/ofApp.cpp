@@ -191,11 +191,14 @@ void ofApp::update() {
   } //isDataValid()  
   
   foregroundFbo.begin();
+  ofSetColor(ofFloatColor(0.0, 0.0, 0.0, 1.0));
+  ofPushMatrix();
+  ofScale(foregroundFbo.getWidth());
+  const float lineWidth = 60.0 * 1.0 / foregroundFbo.getWidth();
   for(auto& divisionLine : divider.getDivisionLines()) {
-    ofSetColor(ofFloatColor(0.0, 0.0, 0.0, 1.0));
-    ofSetLineWidth(6);
-    ofDrawLine(divisionLine.x1*foregroundFbo.getWidth(), divisionLine.y1*foregroundFbo.getHeight(), divisionLine.x2*foregroundFbo.getWidth(), divisionLine.y2*foregroundFbo.getHeight());
+    divisionLine.draw(lineWidth);
   }
+  ofPopMatrix();
   foregroundFbo.end();
 
   {
