@@ -10,7 +10,7 @@ void ofApp::setup(){
   ofEnableAlphaBlending();
   ofDisableArbTex(); // required for texture2D to work in GLSL, makes texture coords normalized
   ofSetFrameRate(Constants::FRAME_RATE);
-  ofSetCircleResolution(100);
+  ofSetCircleResolution(2048);
   TIME_SAMPLE_SET_FRAMERATE(Constants::FRAME_RATE);
 
   double minInstance[3] = { 0.0, 0.0, 0.0 };
@@ -54,16 +54,15 @@ void ofApp::update() {
   // fade foreground
   foregroundFbo.begin();
   ofEnableBlendMode(OF_BLENDMODE_ALPHA);
-  ofSetColor(ofFloatColor(0.0, 0.0, 0.0, 0.02));
+  ofSetColor(ofFloatColor(0.0, 0.0, 0.0, 0.005));
   ofDrawRectangle(0.0, 0.0, foregroundFbo.getWidth(), foregroundFbo.getHeight());
   foregroundFbo.end();
 
+  float s = audioDataProcessorPtr->getNormalisedScalarValue(ofxAudioAnalysisClient::AnalysisScalar::pitch, 200.0, 1800.0);// 700.0, 1300.0);
+  float t = audioDataProcessorPtr->getNormalisedScalarValue(ofxAudioAnalysisClient::AnalysisScalar::rootMeanSquare, 0.0, 4600.0); ////400.0, 4000.0, false);
+  float u = audioDataProcessorPtr->getNormalisedScalarValue(ofxAudioAnalysisClient::AnalysisScalar::spectralKurtosis, 0.0, 25.0);
+  float v = audioDataProcessorPtr->getNormalisedScalarValue(ofxAudioAnalysisClient::AnalysisScalar::spectralCentroid, 0.4, 6.0);
   if (audioDataProcessorPtr->isDataValid()) {
-    float s = audioDataProcessorPtr->getNormalisedScalarValue(ofxAudioAnalysisClient::AnalysisScalar::pitch, 200.0, 1800.0);// 700.0, 1300.0);
-    float t = audioDataProcessorPtr->getNormalisedScalarValue(ofxAudioAnalysisClient::AnalysisScalar::rootMeanSquare, 0.0, 4600.0); ////400.0, 4000.0, false);
-    float u = audioDataProcessorPtr->getNormalisedScalarValue(ofxAudioAnalysisClient::AnalysisScalar::spectralKurtosis, 0.0, 25.0);
-    float v = audioDataProcessorPtr->getNormalisedScalarValue(ofxAudioAnalysisClient::AnalysisScalar::spectralCentroid, 0.4, 6.0);
-    
     TS_START("update-som");
     {
       double instance[3] = { static_cast<double>(s), static_cast<double>(t), static_cast<double>(v) };
@@ -71,9 +70,10 @@ void ofApp::update() {
     }
     TS_STOP("update-som");
 
-    // Draw foreground mark for raw audio data sample in darkened saturated SOM color
     ofFloatColor somColor = somColorAt(s, t);
     ofFloatColor darkSomColor = somColor; darkSomColor.setBrightness(0.2); darkSomColor.setSaturation(1.0);
+
+    // Draw foreground mark for raw audio data sample in darkened saturated SOM color
     foregroundFbo.begin();
     {
       ofEnableBlendMode(OF_BLENDMODE_DISABLED);
@@ -138,19 +138,6 @@ void ofApp::update() {
       ofDrawCircle(p.x * Constants::FLUID_WIDTH, p.y * Constants::FLUID_HEIGHT, u * 100.0);
     }
     fluidSimulation.getFlowValuesFbo().getSource().end();
-    
-    // draw arcs around longer-lasting clusterCentres into foreground
-    foregroundFbo.begin();
-    ofEnableBlendMode(OF_BLENDMODE_ALPHA);
-    ofSetColor(ofFloatColor(0.0, 0.0, 0.0, 0.7));
-    ofNoFill();
-    for (auto& p: clusterCentres) {
-      if (p.w < 2.0) continue;
-      ofPolyline path;
-      path.arc(p.x * foregroundFbo.getWidth(), p.y * foregroundFbo.getHeight(), u * 300.0, u * 300.0, 0.0, 135.0);
-      path.draw();
-    }
-    foregroundFbo.end();
 
     TS_START("update-divider");
     bool dividerChanged = divider.update(clusterCentres);
@@ -214,6 +201,24 @@ void ofApp::update() {
     TS_STOP("decay-clusterCentres");
   }
   
+  // draw arcs around longer-lasting clusterCentres into foreground
+  {
+    foregroundFbo.begin();
+    ofEnableBlendMode(OF_BLENDMODE_ALPHA);
+    ofNoFill();
+    for (auto& p: clusterCentres) {
+      if (p.w < 4.0) continue;
+      ofFloatColor somColor = somColorAt(p.x, p.y);
+      ofFloatColor darkSomColor = somColor; darkSomColor.setBrightness(0.2); darkSomColor.setSaturation(1.0);
+      ofSetColor(darkSomColor);
+      ofPolyline path;
+      float radius = std::fmod(p.w*4.0, 300);
+      path.arc(p.x*foregroundFbo.getWidth(), p.y*foregroundFbo.getHeight(), radius, radius, -180*(u+p.x), 180.0*(v+p.y));
+      path.draw();
+    }
+    foregroundFbo.end();
+  }
+
   // draw divisions on foreground
   {
     foregroundFbo.begin();
