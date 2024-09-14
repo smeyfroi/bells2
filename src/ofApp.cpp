@@ -156,7 +156,7 @@ void ofApp::update() {
     if (dividerChanged) {
       fluidSimulation.getFlowValuesFbo().getSource().begin();
       ofEnableBlendMode(OF_BLENDMODE_ALPHA);
-      ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 1.0));
+      ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 0.5));
       for(auto& divisionLine : divider.getDivisionLines()) {
 //        if (divisionLine.age < 1) {
           ofDrawLine(divisionLine.x1*Constants::FLUID_WIDTH, divisionLine.y1*Constants::FLUID_HEIGHT, divisionLine.x2*Constants::FLUID_WIDTH, divisionLine.y2*Constants::FLUID_HEIGHT);
@@ -192,7 +192,7 @@ void ofApp::update() {
   
   foregroundFbo.begin();
   for(auto& divisionLine : divider.getDivisionLines()) {
-    ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 1.0));
+    ofSetColor(ofFloatColor(0.0, 0.0, 0.0, 1.0));
     ofSetLineWidth(6);
     ofDrawLine(divisionLine.x1*foregroundFbo.getWidth(), divisionLine.y1*foregroundFbo.getHeight(), divisionLine.x2*foregroundFbo.getWidth(), divisionLine.y2*foregroundFbo.getHeight());
   }
@@ -205,7 +205,7 @@ void ofApp::update() {
       float x = centre[0]; float y = centre[1];
       const float COL_FACTOR = 0.008;
       ofFloatColor color = somColorAt(x, y) * COL_FACTOR;
-      color.a = 0.005;
+      color.a = 0.005 * ofRandom(1.0);
       FluidSimulation::Impulse impulse {
         { x * Constants::FLUID_WIDTH, y * Constants::FLUID_HEIGHT },
         Constants::FLUID_WIDTH * 0.085, // radius
@@ -238,7 +238,7 @@ void ofApp::draw(){
     fluidSimulation.getFlowValuesFbo().getSource().draw(0.0, 0.0, Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT);
 //    maskShader.render(fluidSimulation.getFlowValuesFbo().getSource(), maskFbo, Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT, true);
     if (frozenFluid.isAllocated()) {
-      ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 0.9));
+      ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 0.95));
       maskShader.render(frozenFluid, maskFbo, Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT);
     }
 //    ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 0.3));
