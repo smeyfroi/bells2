@@ -10,7 +10,6 @@ void ofApp::setup(){
   ofEnableAlphaBlending();
   ofDisableArbTex(); // required for texture2D to work in GLSL, makes texture coords normalized
   ofSetFrameRate(Constants::FRAME_RATE);
-  ofSetCircleResolution(2048);
   TIME_SAMPLE_SET_FRAMERATE(Constants::FRAME_RATE);
 
   double minInstance[3] = { 0.0, 0.0, 0.0 };
@@ -40,9 +39,10 @@ const int NUM_CLUSTER_CENTRES = 14; //14;
 const int CLUSTER_SOURCE_SAMPLES_MAX = 3000; // Note: 1600 raw samples per frame at 30fps
 const float POINT_DECAY_RATE = 0.3;
 const float SAME_CLUSTER_TOLERANCE = 1.0/10.0;
+const int DEFAULT_CIRCLE_RESOLUTION = 32;
+const int FOREGROUND_CIRCLE_RESOLUTION = 4096;
 
 void ofApp::update() {
-  
   TS_START("update-introspection");
   introspection.update();
   TS_STOP("update-introspection");
@@ -76,6 +76,7 @@ void ofApp::update() {
     // Draw foreground mark for raw audio data sample in darkened saturated SOM color
     foregroundFbo.begin();
     {
+      ofSetCircleResolution(DEFAULT_CIRCLE_RESOLUTION);
       ofEnableBlendMode(OF_BLENDMODE_DISABLED);
       ofSetColor(darkSomColor);
       ofDrawCircle(s*foregroundFbo.getWidth(), t*foregroundFbo.getHeight(), 10.0);
@@ -85,6 +86,7 @@ void ofApp::update() {
     // Draw fluid mark for raw audio data sample in darkened SOM color
     fluidSimulation.getFlowValuesFbo().getSource().begin();
     {
+      ofSetCircleResolution(DEFAULT_CIRCLE_RESOLUTION);
       ofEnableBlendMode(OF_BLENDMODE_DISABLED);
       ofSetColor(darkSomColor);
       ofDrawCircle(s*Constants::FLUID_WIDTH, t*Constants::FLUID_HEIGHT, 3.0);
@@ -129,6 +131,7 @@ void ofApp::update() {
     TS_STOP("update-clusterCentres");
 
     // draw circles around longer-lasting clusterCentres into fluid layer
+    ofSetCircleResolution(DEFAULT_CIRCLE_RESOLUTION);
     fluidSimulation.getFlowValuesFbo().getSource().begin();
     ofEnableBlendMode(OF_BLENDMODE_ADD);
     ofNoFill();
@@ -206,6 +209,8 @@ void ofApp::update() {
     foregroundFbo.begin();
     ofEnableBlendMode(OF_BLENDMODE_ALPHA);
     ofNoFill();
+    ofSetCircleResolution(FOREGROUND_CIRCLE_RESOLUTION);
+    ofSetCurveResolution(FOREGROUND_CIRCLE_RESOLUTION);
     for (auto& p: clusterCentres) {
       if (p.w < 4.0) continue;
       ofFloatColor somColor = somColorAt(p.x, p.y);
@@ -216,6 +221,8 @@ void ofApp::update() {
       path.arc(p.x*foregroundFbo.getWidth(), p.y*foregroundFbo.getHeight(), radius, radius, -180*(u+p.x), 180.0*(v+p.y));
       path.draw();
     }
+    ofSetCircleResolution(DEFAULT_CIRCLE_RESOLUTION);
+    ofSetCurveResolution(DEFAULT_CIRCLE_RESOLUTION);
     foregroundFbo.end();
   }
 
@@ -332,6 +339,37 @@ void ofApp::keyPressed(int key){
     if (plotKeyPressed || spectrumPlotKeyPressed) return;
   }
   if (introspection.keyPressed(key)) return;
+  if (key == 's') {
+    ofFbo compositeFbo;
+    compositeFbo.allocate(Constants::CANVAS_WIDTH, Constants::CANVAS_HEIGHT, GL_RGB);
+    compositeFbo.begin();
+    {
+      // blackground
+      ofClear(0, 255);
+
+      // fluid and frozen fluid
+      {
+        ofEnableBlendMode(OF_BLENDMODE_ALPHA);
+        ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 1.0));
+        fluidSimulation.getFlowValuesFbo().getSource().draw(0.0, 0.0, Constants::CANVAS_WIDTH, Constants::CANVAS_HEIGHT);
+        if (frozenFluid.isAllocated()) {
+          ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 0.95));
+          maskShader.render(frozenFluid, maskFbo, Constants::CANVAS_WIDTH, Constants::CANVAS_HEIGHT);
+        }
+      }
+      
+      // foreground
+      {
+        ofEnableBlendMode(OF_BLENDMODE_ALPHA);
+        ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 1.0));
+        foregroundFbo.draw(0, 0, Constants::CANVAS_WIDTH, Constants::CANVAS_HEIGHT);
+      }
+    }
+    compositeFbo.end();
+    ofPixels pixels;
+    compositeFbo.readToPixels(pixels);
+    ofSaveImage(pixels, ofFilePath::getUserHomeDir()+"/Documents/bells2/snapshot-"+ofGetTimestampString()+".png", OF_IMAGE_QUALITY_BEST);
+  }
 }
 
 //--------------------------------------------------------------
