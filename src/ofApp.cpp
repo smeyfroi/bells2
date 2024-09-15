@@ -217,26 +217,12 @@ void ofApp::update() {
       ofFloatColor darkSomColor = somColor; darkSomColor.setBrightness(0.2); darkSomColor.setSaturation(1.0);
       ofSetColor(darkSomColor);
       ofPolyline path;
-      float radius = std::fmod(p.w*4.0, 300);
+      float radius = std::fmod(p.w*5.0, 480);
       path.arc(p.x*foregroundFbo.getWidth(), p.y*foregroundFbo.getHeight(), radius, radius, -180*(u+p.x), 180.0*(v+p.y));
       path.draw();
     }
     ofSetCircleResolution(DEFAULT_CIRCLE_RESOLUTION);
     ofSetCurveResolution(DEFAULT_CIRCLE_RESOLUTION);
-    foregroundFbo.end();
-  }
-
-  // draw divisions on foreground
-  {
-    foregroundFbo.begin();
-    ofSetColor(ofFloatColor(0.0, 0.0, 0.0, 1.0));
-    ofPushMatrix();
-    ofScale(foregroundFbo.getWidth());
-    const float lineWidth = 60.0 * 1.0 / foregroundFbo.getWidth();
-    for(auto& divisionLine : divider.getDivisionLines()) {
-      divisionLine.draw(lineWidth);
-    }
-    ofPopMatrix();
     foregroundFbo.end();
   }
 
@@ -278,13 +264,10 @@ void ofApp::draw(){
     ofEnableBlendMode(OF_BLENDMODE_ALPHA);
     ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 1.0));
     fluidSimulation.getFlowValuesFbo().getSource().draw(0.0, 0.0, Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT);
-//    maskShader.render(fluidSimulation.getFlowValuesFbo().getSource(), maskFbo, Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT, true);
-    if (frozenFluid.isAllocated()) {
-      ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 0.95));
-      maskShader.render(frozenFluid, maskFbo, Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT);
-    }
-//    ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 0.3));
-//    maskShader.render(fluidSimulation.getFlowValuesFbo().getSource(), maskFbo, Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT);
+//    if (frozenFluid.isAllocated()) {
+//      ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 0.95));
+//      maskShader.render(frozenFluid, maskFbo, Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT);
+//    }
   }
   
   // foreground
@@ -292,6 +275,18 @@ void ofApp::draw(){
     ofEnableBlendMode(OF_BLENDMODE_ALPHA);
     ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 1.0));
     foregroundFbo.draw(0, 0, Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT);
+  }
+  
+  // draw divisions on foreground
+  {
+    ofSetColor(ofFloatColor(0.0, 0.0, 0.0, 1.0));
+    ofPushMatrix();
+    ofScale(ofGetWindowWidth());
+    const float lineWidth = 15.0 * 1.0 / ofGetWindowWidth();
+    for(auto& divisionLine : divider.getDivisionLines()) {
+      divisionLine.draw(lineWidth);
+    }
+    ofPopMatrix();
   }
   
   // introspection
