@@ -82,7 +82,7 @@ bool Divider::isLineEligible(const DivisionLine& line) const {
 //          && (std::abs(line.y1) < EDGE_TOLERANCE || std::abs(line.y2 - 1.0) < EDGE_TOLERANCE));
 }
 
-DivisionLine Divider::findNewLineCloseTo(const std::vector<glm::vec4>& points, float x1, float y1, float x2, float y2) const {
+DivisionLine Divider::findNewDivisionLineCloseTo(const std::vector<glm::vec4>& points, float x1, float y1, float x2, float y2) const {
   // might pick the same point for start and end to make an invalid line
   if (auto p1 = findPointCloseTo(points, x1, y1)) {
     if (auto p2 = findPointCloseTo(points, x2, y2)) {
@@ -90,6 +90,61 @@ DivisionLine Divider::findNewLineCloseTo(const std::vector<glm::vec4>& points, f
     }
   }
   return DivisionLine(); // an invalid DivisionLine
+}
+
+std::vector<glm::vec2> intersectionsWithEdges(float x1, float y1, float x2, float y2) {
+  std::vector<glm::vec2> result;
+  float yWest = yForLineAtX(0.0, x1, y1, x2, y2);
+  float yEast = yForLineAtX(1.0, x1, y1, x2, y2);
+  float xNorth = xForLineAtY(1.0, x1, y1, x2, y2);
+  float xSouth = xForLineAtY(0.0, x1, y1, x2, y2);
+  if (yWest >= 0.0 && yWest <= 1.0) result.push_back(glm::vec2 { 0.0, yWest });
+  if (yEast >= 0.0 && yEast <= 1.0) result.push_back(glm::vec2 { 1.0, yEast });
+  if (xNorth >= 0.0 && xNorth <= 1.0) result.push_back(glm::vec2 { xNorth, 1.0 });
+  if (xSouth >= 0.0 && xSouth <= 1.0) result.push_back(glm::vec2 { xSouth, 0.0 });
+  return result;
+}
+
+std::optional<std::tuple<glm::vec2, glm::vec2>> Divider::extendedLineEnclosedByDivider(float x1, float y1, float x2, float y2) const {
+  glm::vec2 p1 {x1, y1};
+  glm::vec2 p2 {x2, y2};
+
+  auto edgeIntersections = intersectionsWithEdges(x1, y1, x2, y2);
+  if (edgeIntersections.size() < 2) return {}; // gradient of line is NaN
+
+  glm::vec2 edgeIntersection1 = edgeIntersections[0];
+  glm::vec2 edgeIntersection2 = edgeIntersections[1];
+  if (glm::distance2(p1, edgeIntersections[1]) < glm::distance2(p1, edgeIntersections[0])) {
+    glm::vec2 edgeIntersection1 = edgeIntersections[1];
+    glm::vec2 edgeIntersection2 = edgeIntersections[0];
+  }
+
+  glm::vec2 intersection1 = edgeIntersection1;
+  glm::vec2 intersection2 = edgeIntersection2;
+  
+  for (auto& dividerLine : lines) {
+    glm::vec2 newIntersection;
+    if (ofLineSegmentIntersection(edgeIntersection1, edgeIntersection2, glm::vec2(dividerLine.x1, dividerLine.y1), glm::vec2(dividerLine.x2, dividerLine.y2), newIntersection)) {
+      if (glm::distance2(p1, newIntersection) < glm::distance2(p1, intersection1) &&
+          glm::distance2(edgeIntersection1, newIntersection) < glm::distance2(edgeIntersection1, p1)) {
+        intersection1 = newIntersection;
+      }
+    }
+  }
+
+  for (auto& dividerLine : lines) {
+    glm::vec2 newIntersection;
+    if (ofLineSegmentIntersection(edgeIntersection1, edgeIntersection2, glm::vec2(dividerLine.x1, dividerLine.y1), glm::vec2(dividerLine.x2, dividerLine.y2), newIntersection)) {
+      if (intersection1 != newIntersection &&
+          glm::distance2(p2, newIntersection) < glm::distance2(p2, intersection2) &&
+          glm::distance2(edgeIntersection2, newIntersection) < glm::distance2(edgeIntersection2, p2)) {
+        intersection2 = newIntersection;
+      }
+    }
+  }
+
+  if (intersection1 != intersection2) return std::tuple { intersection1, intersection2 };
+  return {};
 }
 
 // Replace obsolete lines with close equivalents if possible
@@ -102,7 +157,7 @@ bool Divider::update(std::vector<glm::vec4>& points) {
         && (!isPointInPoints(line.refX1, line.refY1, points)
         || !isPointInPoints(line.refX2, line.refY2, points))) {
       // line no longer connects valid points so find a nearby equivalent using points not in use, retaining the existing line if no valid replacement
-      auto newLine = findNewLineCloseTo(points, line.refX1, line.refY1, line.refX2, line.refY2);
+      auto newLine = findNewDivisionLineCloseTo(points, line.refX1, line.refY1, line.refX2, line.refY2);
       if (newLine.isValid() && !isLineInLines(newLine)) {
         line = newLine;
         linesChanged = true;

@@ -45,11 +45,11 @@ private:
   
   ofFbo foregroundFbo;
   
-  std::vector<std::array<float, 2>> clusterSourceData;
+  std::vector<std::array<float, 2>> recentNoteXYs;
   std::tuple<std::vector<std::array<float, 2>>, std::vector<uint32_t>> clusterResults;
   std::vector<glm::vec4> clusterCentres;
   
-  Divider divider { 5 };
+  Divider divider { 7 };
   ofFbo maskFbo;
   MaskShader maskShader;
 

@@ -49,7 +49,8 @@ public:
   bool isRefPointInLines(float x, float y) const;
   bool isLineInLines(const DivisionLine& line) const;
   bool isLineEligible(const DivisionLine& line) const;
-  DivisionLine findNewLineCloseTo(const std::vector<glm::vec4>& points, float x1, float y1, float x2, float y2) const;
+  DivisionLine findNewDivisionLineCloseTo(const std::vector<glm::vec4>& points, float x1, float y1, float x2, float y2) const;
+  std::optional<std::tuple<glm::vec2, glm::vec2>> extendedLineEnclosedByDivider(float x1, float y1, float x2, float y2) const;
 
   // Return true when a change happened. May modify the points
   bool update(std::vector<glm::vec4>& points);

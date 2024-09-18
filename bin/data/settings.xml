@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<group>
+	<Fluid_Simulation>
+		<dt>0.025</dt>
+		<vorticity>10</vorticity>
+		<value:dissipation>0.99801</value:dissipation>
+		<velocity:dissipation>0.9975</velocity:dissipation>
+		<temperature:dissipation>0.996</temperature:dissipation>
+		<pressure:iterations>20</pressure:iterations>
+		<Bouyancy>
+			<ambientTemperature>0</ambientTemperature>
+			<smokeBouyancy>1</smokeBouyancy>
+			<smokeWeight>0.05</smokeWeight>
+			<gravityForceX>0</gravityForceX>
+			<gravityForceY>-0.98</gravityForceY>
+		</Bouyancy>
+	</Fluid_Simulation>
+</group>
