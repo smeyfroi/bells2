@@ -22,19 +22,17 @@ void ofApp::setup(){
   
   fluidSimulation.setup({ Constants::FLUID_WIDTH, Constants::FLUID_HEIGHT });
   
-  maskFbo.allocate(Constants::CANVAS_WIDTH, Constants::CANVAS_HEIGHT, GL_R8);
-  maskFbo.begin();
-  ofClear(ofColor::black);
-  maskFbo.end();
-  maskShader.load();
-  
+  foregroundLinesFbo.allocate(Constants::CANVAS_WIDTH, Constants::CANVAS_HEIGHT, GL_RGBA);
+  foregroundLinesFbo.clearColorBuffer(ofFloatColor(0.0, 0.0, 0.0, 0.0));
   foregroundFbo.allocate(Constants::CANVAS_WIDTH, Constants::CANVAS_HEIGHT, GL_RGBA32F);
   foregroundFbo.clearColorBuffer(ofFloatColor(0.0, 0.0, 0.0, 0.0));
+  foregroundMaskFbo.allocate(Constants::CANVAS_WIDTH, Constants::CANVAS_HEIGHT, GL_R8);
+  maskShader.load();
 
   parameters.add(fluidSimulation.getParameterGroup());
   gui.setup(parameters);
 
-  ofxTimeMeasurements::instance()->setEnabled(true);
+  ofxTimeMeasurements::instance()->setEnabled(false);
 }
 
 //--------------------------------------------------------------
@@ -54,10 +52,17 @@ void ofApp::update() {
   audioDataProcessorPtr->update();
   TS_STOP("update-audoanalysis");
 
+  // fade foreground lines
+  foregroundLinesFbo.begin();
+  ofEnableBlendMode(OF_BLENDMODE_ALPHA);
+  ofSetColor(ofFloatColor(0.0, 0.0, 0.0, 0.05));
+  ofDrawRectangle(0.0, 0.0, foregroundLinesFbo.getWidth(), foregroundLinesFbo.getHeight());
+  foregroundLinesFbo.end();
+
   // fade foreground
   foregroundFbo.begin();
   ofEnableBlendMode(OF_BLENDMODE_ALPHA);
-  ofSetColor(ofFloatColor(0.0, 0.0, 0.0, 0.01));
+  ofSetColor(ofFloatColor(0.0, 0.0, 0.0, 0.007));
   ofDrawRectangle(0.0, 0.0, foregroundFbo.getWidth(), foregroundFbo.getHeight());
   foregroundFbo.end();
 
@@ -137,24 +142,31 @@ void ofApp::update() {
     TS_STOP("update-clusterCentres");
     
     // Make fine structure from some recent notes
+    const std::vector<uint32_t>& recentNoteXYIds = std::get<1>(clusterResults);
     if (recentNoteXYs.size() > 100) {
-      for(int i = 0; i < 1; i++) {
-        std::vector<uint32_t>& recentNoteXYIds = std::get<1>(clusterResults);
-        std::vector<uint32_t> chosenNoteIds;
-        size_t id = ofRandom(recentNoteXYIds.size());
-        chosenNoteIds.push_back(id);
+      
+      // find some number of note clusters
+      for (int i = 0; i < 5; i++) {
+        
+        std::vector<uint32_t> sameClusterNoteIds; // collect note IDs all from the same cluster
+        size_t id = ofRandom(recentNoteXYIds.size()); // start with a random note TODO: don't use ofRandom
+        sameClusterNoteIds.push_back(id);
         uint32_t clusterId = recentNoteXYIds[id];
-        auto& cluster = std::get<0>(clusterResults)[clusterId];
-        float x = cluster[0]; float y = cluster[1];
-        for(int i = 0; i < 8; i++) {
+        
+        // pick a number of additional random notes and keep if from this cluster
+        for(int i = 0; i < 12; i++) {
           id = ofRandom(recentNoteXYIds.size());
           if (recentNoteXYIds[id] == clusterId) {
-            chosenNoteIds.push_back(id);
+            sameClusterNoteIds.push_back(id);
           }
         }
-        if (chosenNoteIds.size() > 2) {
+
+        // if we found enough related notes then draw something
+        if (sameClusterNoteIds.size() > 2) {
+          
+          // make path from notes in normalised coords
           ofPath path;
-          for (uint32_t id : chosenNoteIds) {
+          for (uint32_t id : sameClusterNoteIds) {
             const auto& note = recentNoteXYs[id];
             path.lineTo(note[0], note[1]);
           }
@@ -162,39 +174,115 @@ void ofApp::update() {
 
           // paint into the fluid layer
           fluidSimulation.getFlowValuesFbo().getSource().begin();
-          path.scale(Constants::FLUID_WIDTH, Constants::FLUID_HEIGHT);
-          ofEnableBlendMode(OF_BLENDMODE_ALPHA);
-          ofFloatColor fillColor = somColor;
-          fillColor.a = 0.3;
-          path.setColor(fillColor);
-          path.setFilled(true);
-          path.draw();
+          {
+            ofPath fluidPath = path;
+            fluidPath.scale(Constants::FLUID_WIDTH, Constants::FLUID_HEIGHT);
+            ofEnableBlendMode(OF_BLENDMODE_ALPHA);
+            ofFloatColor fillColor = somColor;
+            fillColor.a = 0.3;
+            fluidPath.setColor(fillColor);
+            fluidPath.setFilled(true);
+            fluidPath.draw();
+          }
           fluidSimulation.getFlowValuesFbo().getSource().end();
 
-          // draw extended outlines in the foreground
-          float width = 10 * 1.0 / foregroundFbo.getWidth();
-          foregroundFbo.begin();
+          // find normalised path bounds
+          ofRectangle pathBounds;
+          for (const auto& polyline : path.getOutline()) {
+            pathBounds = pathBounds.getUnion(polyline.getBoundingBox());
+          }
+
+          // translate it to start from (0, 0)
+          path.translate({ -pathBounds.x, -pathBounds.y });
+          
+          // scale up to some limit
+          constexpr float MAX_SCALE = 2.0;
+          float scaleX = std::fminf(MAX_SCALE, 1.0 / pathBounds.width);
+          float scaleY = std::fminf(MAX_SCALE, 1.0 / pathBounds.height);
+          path.scale(scaleX, scaleY);
+
+          // and make a mask from the path
+          foregroundMaskFbo.begin();
+          {
+            ofClear(0, 255);
+            ofSetColor(255);
+            path.setFilled(true);
+            ofPushMatrix();
+            ofScale(foregroundMaskFbo.getWidth(), foregroundMaskFbo.getHeight());
+            path.draw();
+            ofPushMatrix();
+          }
+          foregroundMaskFbo.end();
+
+          // draw a reduced version of the foreground into the mask
+          if (frozenFluid.isAllocated()) {
+            foregroundFbo.begin();
+            {
+              ofEnableBlendMode(OF_BLENDMODE_ADD);
+              ofSetColor(216);
+              ofPushMatrix();
+              ofScale(1.0 / scaleX, 1.0 / scaleY);
+              ofTranslate((pathBounds.x) * foregroundFbo.getWidth(), (pathBounds.y) * foregroundFbo.getHeight());
+              maskShader.render(frozenFluid, foregroundMaskFbo, foregroundFbo.getWidth(), foregroundFbo.getHeight());
+              ofPopMatrix();
+            }
+            foregroundFbo.end();
+          }
+          
+          // draw extended outlines in the foreground (saving them for redrawing into fluid)
+          std::vector<std::tuple<glm::vec2, glm::vec2>> extendedLines;
+          float width = 10 * 1.0 / foregroundLinesFbo.getWidth();
+          foregroundLinesFbo.begin();
           ofEnableBlendMode(OF_BLENDMODE_ALPHA);
           ofSetColor(ofColor::black);
           ofPushMatrix();
           ofScale(foregroundFbo.getWidth(), foregroundFbo.getHeight());
+          {
+            for(auto iter = sameClusterNoteIds.begin(); iter < sameClusterNoteIds.end(); iter++) {
+              auto id1 = *iter;
+              const auto& note1 = recentNoteXYs[id1];
+              float x1 = note1[0]; float y1 = note1[1];
+              uint32_t id2;
+              if (iter == sameClusterNoteIds.end() - 1) {
+                id2 = *sameClusterNoteIds.begin();
+              } else {
+                id2 = *(iter + 1);
+              }
+              const auto& note2 = recentNoteXYs[id2];
+              float x2 = note2[0]; float y2 = note2[1];
+              if (note1 == note2) continue;
+              auto line = divider.extendedLineEnclosedByDivider(x1, y1, x2, y2);
+              extendedLines.push_back(line);
+              glm::vec2 p1 = std::get<0>(line); glm::vec2 p2 = std::get<1>(line);
+              ofPushMatrix();
+              ofTranslate(p1.x, p1.y);
+              ofRotateRad(std::atan2((p2.y-p1.y), (p2.x-p1.x)));
+              ofDrawRectangle(0.0, -width/2.0, ofDist(p1.x, p1.y, p2.x, p2.y), width);
+              ofPopMatrix();
+            }
+            //          for (uint32_t id : chosenNoteIds) {
+            //            const auto& note = recentNoteXYs[id];
+            //            float x = note[0]; float y = note[1];
+            //            ofPushMatrix();
+            //            ofTranslate(x1, y1);
+            //            ofRotateRad(std::atan2((y2 - y1), (x2 - x1)));
+            //            ofDrawRectangle(-1.0, -width/2.0, ofDist(x1, y1, x2, y2)+1.0, width);
+            //            ofPopMatrix();
+            //          }
+          }
+          ofPopMatrix();
+          foregroundLinesFbo.end();
           
-          
-          
-          // FIXME: also join last to first note to close the shape
-          
-          
-          
-          for(auto iter = chosenNoteIds.begin(); iter < chosenNoteIds.end() - 1; iter++) {
-            auto id1 = *iter;
-            const auto& note1 = recentNoteXYs[id1];
-            float x1 = note1[0]; float y1 = note1[1];
-            auto id2 = *(iter + 1);
-            const auto& note2 = recentNoteXYs[id2];
-            float x2 = note2[0]; float y2 = note2[1];
-            if (note1 == note2) continue;
-            if (auto line = divider.extendedLineEnclosedByDivider(x1, y1, x2, y2)) {
-              glm::vec2 p1 = std::get<0>(*line); glm::vec2 p2 = std::get<1>(*line);
+          // redraw extended lines into the fluid layer
+          fluidSimulation.getFlowValuesFbo().getSource().begin();
+          ofEnableBlendMode(OF_BLENDMODE_ALPHA);
+          ofSetColor(ofFloatColor(0.0, 0.0, 0.0, 0.4));
+          ofPushMatrix();
+          ofScale(Constants::FLUID_WIDTH, Constants::FLUID_HEIGHT);
+          {
+            float width = 1.5 * 1.0 / Constants::FLUID_WIDTH;
+            for (const auto& line : extendedLines) {
+              glm::vec2 p1 = std::get<0>(line); glm::vec2 p2 = std::get<1>(line);
               ofPushMatrix();
               ofTranslate(p1.x, p1.y);
               ofRotateRad(std::atan2((p2.y-p1.y), (p2.x-p1.x)));
@@ -202,44 +290,8 @@ void ofApp::update() {
               ofPopMatrix();
             }
           }
-//          for (uint32_t id : chosenNoteIds) {
-//            const auto& note = recentNoteXYs[id];
-//            float x = note[0]; float y = note[1];
-//            ofPushMatrix();
-//            ofTranslate(x1, y1);
-//            ofRotateRad(std::atan2((y2 - y1), (x2 - x1)));
-//            ofDrawRectangle(-1.0, -width/2.0, ofDist(x1, y1, x2, y2)+1.0, width);
-//            ofPopMatrix();
-//          }
           ofPopMatrix();
-          foregroundFbo.end();
-          
-          //        maskFbo.begin();
-          //        glEnable(GL_BLEND);
-          //        glBlendEquation(GL_FUNC_ADD);
-          //        glBlendFunc(GL_ONE_MINUS_DST_COLOR, GL_ZERO);
-          //        path.scale(maskFbo.getWidth(), maskFbo.getHeight());
-          //        path.setColor(ofColor::white);
-          //        path.draw();
-          //        maskFbo.end();
-          
-          //        ofPath outlinePath = path;
-          //        foregroundFbo.begin();
-          //        ofEnableBlendMode(OF_BLENDMODE_ALPHA);
-          //        outlinePath.scale(foregroundFbo.getWidth(), foregroundFbo.getHeight());
-          //        outlinePath.setStrokeColor(ofColor::black);
-          //        outlinePath.setFilled(false);
-          //        outlinePath.setStrokeWidth(2.0);
-          //        outlinePath.draw();
-          
-//          foregroundFbo.begin();
-//          path.scale(foregroundFbo.getWidth(), foregroundFbo.getHeight());
-//          ofFloatColor fillColor = somColor;
-//          fillColor.a = 0.5;
-//          path.setColor(fillColor);
-//          path.setFilled(true);
-//          path.draw();
-//          foregroundFbo.end();
+          fluidSimulation.getFlowValuesFbo().getSource().end();
         }
       }
     }
@@ -274,25 +326,6 @@ void ofApp::update() {
       ofPixels frozenPixels;
       fluidSimulation.getFlowValuesFbo().getSource().getTexture().readToPixels(frozenPixels);
       frozenFluid.allocate(frozenPixels);
-      
-//      // update mask
-//      maskFbo.begin();
-//      ofClear(ofColor::black);
-//      glEnable(GL_BLEND);
-//      glBlendEquation(GL_FUNC_ADD);
-//      glBlendFunc(GL_ONE_MINUS_DST_COLOR, GL_ZERO);
-//      for (auto& line : divider.getDivisionLines()) {
-//        ofPath path;
-//        path.moveTo(line.x1, line.y1);
-//        path.lineTo(line.x2, line.y2);
-//        path.lineTo(1.0, 0.0);
-//        path.lineTo(0.0, 0.0);
-//        path.close();
-//        path.scale(maskFbo.getWidth(), maskFbo.getHeight());
-//        path.setColor(ofColor::white);
-//        path.draw();
-//      }
-//      maskFbo.end();
     }
     TS_STOP("update-divider");
     
@@ -318,6 +351,20 @@ void ofApp::update() {
     TS_STOP("decay-clusterCentres");
   }
   
+  // draw divisions on foreground
+  {
+    foregroundLinesFbo.begin();
+    ofSetColor(ofFloatColor(0.0, 0.0, 0.0, 1.0));
+    ofPushMatrix();
+    ofScale(foregroundLinesFbo.getWidth(), foregroundLinesFbo.getHeight());
+    const float lineWidth = 80.0 * 1.0 / foregroundLinesFbo.getWidth();
+    for(auto& divisionLine : divider.getDivisionLines()) {
+      divisionLine.draw(lineWidth);
+    }
+    ofPopMatrix();
+    foregroundLinesFbo.end();
+  }
+
   // draw arcs around longer-lasting clusterCentres into foreground
   {
     foregroundFbo.begin();
@@ -328,8 +375,8 @@ void ofApp::update() {
     for (auto& p: clusterCentres) {
       if (p.w < 4.0) continue;
       ofFloatColor somColor = somColorAt(p.x, p.y);
-      ofFloatColor darkSomColor = somColor; darkSomColor.setBrightness(0.2); darkSomColor.setSaturation(1.0);
-      darkSomColor.a = 0.5;
+      ofFloatColor darkSomColor = somColor; darkSomColor.setBrightness(0.7); darkSomColor.setSaturation(1.0);
+      darkSomColor.a = 0.7;
       ofSetColor(darkSomColor);
       ofPolyline path;
       float radius = std::fmod(p.w*5.0, 480);
@@ -374,16 +421,11 @@ void ofApp::draw(){
   ofPushStyle();
   ofClear(0, 255);
   
-  // fluid and frozen fluid
+  // fluid
   {
     ofEnableBlendMode(OF_BLENDMODE_ALPHA);
     ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 1.0));
     fluidSimulation.getFlowValuesFbo().getSource().draw(0.0, 0.0, Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT);
-//    if (frozenFluid.isAllocated()) {
-//      ofEnableBlendMode(OF_BLENDMODE_ADD);
-//      ofSetColor(ofFloatColor(0.2, 0.2, 0.2, 0.3));
-//      maskShader.render(frozenFluid, maskFbo, Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT);
-//    }
   }
   
   // foreground
@@ -393,16 +435,11 @@ void ofApp::draw(){
     foregroundFbo.draw(0, 0, Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT);
   }
   
-  // draw divisions on foreground
+  // foreground lines
   {
-    ofSetColor(ofFloatColor(0.0, 0.0, 0.0, 1.0));
-    ofPushMatrix();
-    ofScale(ofGetWindowWidth());
-    const float lineWidth = 15.0 * 1.0 / ofGetWindowWidth();
-    for(auto& divisionLine : divider.getDivisionLines()) {
-      divisionLine.draw(lineWidth);
-    }
-    ofPopMatrix();
+    ofEnableBlendMode(OF_BLENDMODE_ALPHA);
+    ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 1.0));
+    foregroundLinesFbo.draw(0, 0, Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT);
   }
   
   // introspection
@@ -435,7 +472,6 @@ void ofApp::draw(){
 
 //--------------------------------------------------------------
 void ofApp::exit(){
-
 }
 
 //--------------------------------------------------------------
@@ -458,15 +494,11 @@ void ofApp::keyPressed(int key){
       // blackground
       ofClear(0, 255);
 
-      // fluid and frozen fluid
+      // fluid
       {
         ofEnableBlendMode(OF_BLENDMODE_ALPHA);
         ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 1.0));
         fluidSimulation.getFlowValuesFbo().getSource().draw(0.0, 0.0, Constants::CANVAS_WIDTH, Constants::CANVAS_HEIGHT);
-//        if (frozenFluid.isAllocated()) {
-//          ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 0.15));
-//          maskShader.render(frozenFluid, maskFbo, Constants::CANVAS_WIDTH, Constants::CANVAS_HEIGHT);
-//        }
       }
       
       // foreground
@@ -476,16 +508,11 @@ void ofApp::keyPressed(int key){
         foregroundFbo.draw(0, 0, Constants::CANVAS_WIDTH, Constants::CANVAS_HEIGHT);
       }
       
-      // draw divisions on foreground
+      // foreground lines
       {
-        ofSetColor(ofFloatColor(0.0, 0.0, 0.0, 1.0));
-        ofPushMatrix();
-        ofScale(Constants::CANVAS_WIDTH);
-        const float lineWidth = 15.0 * 1.0 / ofGetWindowWidth();
-        for(auto& divisionLine : divider.getDivisionLines()) {
-          divisionLine.draw(lineWidth);
-        }
-        ofPopMatrix();
+        ofEnableBlendMode(OF_BLENDMODE_ALPHA);
+        ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 1.0));
+        foregroundLinesFbo.draw(0, 0, Constants::CANVAS_WIDTH, Constants::CANVAS_HEIGHT);
       }
     }
     compositeFbo.end();
@@ -497,55 +524,44 @@ void ofApp::keyPressed(int key){
 
 //--------------------------------------------------------------
 void ofApp::keyReleased(int key){
-
 }
 
 //--------------------------------------------------------------
 void ofApp::mouseMoved(int x, int y ){
-
 }
 
 //--------------------------------------------------------------
 void ofApp::mouseDragged(int x, int y, int button){
-
 }
 
 //--------------------------------------------------------------
 void ofApp::mousePressed(int x, int y, int button){
-
 }
 
 //--------------------------------------------------------------
 void ofApp::mouseReleased(int x, int y, int button){
-
 }
 
 //--------------------------------------------------------------
 void ofApp::mouseScrolled(int x, int y, float scrollX, float scrollY){
-
 }
 
 //--------------------------------------------------------------
 void ofApp::mouseEntered(int x, int y){
-
 }
 
 //--------------------------------------------------------------
 void ofApp::mouseExited(int x, int y){
-
 }
 
 //--------------------------------------------------------------
 void ofApp::windowResized(int w, int h){
-
 }
 
 //--------------------------------------------------------------
 void ofApp::gotMessage(ofMessage msg){
-
 }
 
 //--------------------------------------------------------------
-void ofApp::dragEvent(ofDragInfo dragInfo){ 
-
+void ofApp::dragEvent(ofDragInfo dragInfo){
 }

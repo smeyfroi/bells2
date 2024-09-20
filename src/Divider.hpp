@@ -4,6 +4,7 @@
 #include "glm/vec2.hpp"
 #include <vector>
 #include "ofFbo.h"
+#include "ofMath.h"
 
 static constexpr float EPSILON = std::numeric_limits<float>::epsilon();
 const float CLOSE_TOLERANCE_SQUARED = std::pow(1.0 / 10.0, 2.0);
@@ -30,6 +31,10 @@ struct DivisionLine {
     return (std::abs(refX1-x) < EPSILON && std::abs(refY1-y) < EPSILON)
       || (std::abs(refX2-x) < EPSILON && std::abs(refY2-y) < EPSILON);
   }
+  inline bool isRefPointCloseTo(float x, float y) const {
+    return ((ofDistSquared(refX1, refY1, x, y) < CLOSE_TOLERANCE_SQUARED)
+            || (ofDistSquared(refX2, refY2, x, y) < CLOSE_TOLERANCE_SQUARED));
+  }
   bool isValid() const;
   void draw(float width) const;
 };
@@ -48,9 +53,10 @@ public:
 
   bool isRefPointInLines(float x, float y) const;
   bool isLineInLines(const DivisionLine& line) const;
+  bool isLineCloseToLines(const DivisionLine& line) const;
   bool isLineEligible(const DivisionLine& line) const;
   DivisionLine findNewDivisionLineCloseTo(const std::vector<glm::vec4>& points, float x1, float y1, float x2, float y2) const;
-  std::optional<std::tuple<glm::vec2, glm::vec2>> extendedLineEnclosedByDivider(float x1, float y1, float x2, float y2) const;
+  std::tuple<glm::vec2, glm::vec2> extendedLineEnclosedByDivider(float x1, float y1, float x2, float y2) const;
 
   // Return true when a change happened. May modify the points
   bool update(std::vector<glm::vec4>& points);

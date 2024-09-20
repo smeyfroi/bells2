@@ -7,8 +7,8 @@
 #include "ofxAudioData.h"
 #include "FluidSimulation.h"
 #include "Introspection.hpp"
-#include "MaskShader.h"
 #include "Divider.hpp"
+#include "MaskShader.h"
 
 class ofApp : public ofBaseApp{
 
@@ -43,15 +43,16 @@ private:
   FluidSimulation fluidSimulation;
   ofTexture frozenFluid;
   
+  ofFbo foregroundLinesFbo;
   ofFbo foregroundFbo;
+  ofFbo foregroundMaskFbo;
+  MaskShader maskShader;
   
   std::vector<std::array<float, 2>> recentNoteXYs;
   std::tuple<std::vector<std::array<float, 2>>, std::vector<uint32_t>> clusterResults;
   std::vector<glm::vec4> clusterCentres;
   
-  Divider divider { 7 };
-  ofFbo maskFbo;
-  MaskShader maskShader;
+  Divider divider { 5 };
 
   Introspection introspection; // we add things to this in normalised coords
 

@@ -68,18 +68,23 @@ bool Divider::isRefPointInLines(float x, float y) const {
 bool Divider::isLineInLines(const DivisionLine& line) const {
   return std::any_of(lines.begin(),
                      lines.end(),
-                     [&](const auto& l) { return line.isEqual(l); });
+                     [&](const auto& l) { return l.isEqual(line); });
+}
+
+bool Divider::isLineCloseToLines(const DivisionLine& line) const {
+  return std::any_of(lines.begin(),
+                     lines.end(),
+                     [&](const auto& l) {
+    return (l.isRefPointCloseTo(line.refX1, line.refY1) || l.isRefPointCloseTo(line.refX2, line.refY2));
+  });
 }
 
 //constexpr float EDGE_TOLERANCE = 1.0 / 5.0;
 bool Divider::isLineEligible(const DivisionLine& line) const {
   if (!line.isValid()) return false;
   if (isLineInLines(line)) return false;
+  if (isLineCloseToLines(line)) return false;
   return true;
-//  if (isRefPointInLines(line.refX1, line.refY1) || isRefPointInLines(line.refX2, line.refY2)) return false; // Ref point already used
-  // Attempt to limit to edges, but needs fixing and not sure it's a good idea
-//  return ((std::abs(line.x1) < EDGE_TOLERANCE || std::abs(line.x2 - 1.0) < EDGE_TOLERANCE)
-//          && (std::abs(line.y1) < EDGE_TOLERANCE || std::abs(line.y2 - 1.0) < EDGE_TOLERANCE));
 }
 
 DivisionLine Divider::findNewDivisionLineCloseTo(const std::vector<glm::vec4>& points, float x1, float y1, float x2, float y2) const {
@@ -105,7 +110,7 @@ std::vector<glm::vec2> intersectionsWithEdges(float x1, float y1, float x2, floa
   return result;
 }
 
-std::optional<std::tuple<glm::vec2, glm::vec2>> Divider::extendedLineEnclosedByDivider(float x1, float y1, float x2, float y2) const {
+std::tuple<glm::vec2, glm::vec2> Divider::extendedLineEnclosedByDivider(float x1, float y1, float x2, float y2) const {
   glm::vec2 p1 {x1, y1};
   glm::vec2 p2 {x2, y2};
 
@@ -143,8 +148,7 @@ std::optional<std::tuple<glm::vec2, glm::vec2>> Divider::extendedLineEnclosedByD
     }
   }
 
-  if (intersection1 != intersection2) return std::tuple { intersection1, intersection2 };
-  return {};
+  return std::tuple { intersection1, intersection2 };
 }
 
 // Replace obsolete lines with close equivalents if possible
@@ -181,16 +185,5 @@ bool Divider::update(std::vector<glm::vec4>& points) {
     line = newLine;
     linesChanged = true;
   }
-//    for (auto iter1 = points.begin(); iter1 != points.end(); iter1++) {
-//      glm::vec4 p1 = *iter1;
-//      for (auto iter2 = iter1+1; iter2 != points.end(); iter2++) {
-//        glm::vec4 p2 = *iter2;
-//        DivisionLine newLine { p1.x, p1.y, p2.x, p2.y };
-//        if (!isLineEligible(newLine)) continue;
-//        line = newLine;
-//        linesChanged = true;
-//      }
-//    }
-//  }
   return linesChanged;
 }
