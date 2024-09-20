@@ -37,6 +37,8 @@ void ofApp::setup(){
   fluidParameterGroup.getInt("pressure:iterations").set(22);
   parameters.add(fluidParameterGroup);
   gui.setup(parameters);
+  
+  plotVisible = false;
 
   ofxTimeMeasurements::instance()->setEnabled(false);
 }
@@ -350,8 +352,7 @@ void ofApp::update() {
       }
     }
     // delete decayed clusterCentres
-    clusterCentres.erase(std::remove_if(
-                                        clusterCentres.begin(),
+    clusterCentres.erase(std::remove_if(clusterCentres.begin(),
                                         clusterCentres.end(),
                                         [](const glm::vec4& n) { return n.w <=0; }),
                          clusterCentres.end());
@@ -424,7 +425,17 @@ ofFloatColor ofApp::somColorAt(float x, float y) const {
 }
 
 //--------------------------------------------------------------
-void ofApp::draw(){
+void ofApp::draw() {
+  if (plotVisible) {
+    std::unique_ptr<CircleShape> shapePtr(new CircleShape { ofRandom(1.0), ofRandom(1.0), 0.05, ofColor::black, 1000 });
+    plot.addShapePtr(std::move(shapePtr));
+    ofClear(255, 255);
+    ofPushMatrix();
+    plot.draw(ofGetWindowWidth());
+    ofPopMatrix();
+    return;
+  }
+  
   ofPushStyle();
   ofClear(0, 255);
   
@@ -474,7 +485,6 @@ void ofApp::draw(){
 
   // gui
   if (guiVisible) gui.draw();
-
 }
 
 //--------------------------------------------------------------
@@ -526,6 +536,13 @@ void ofApp::keyPressed(int key){
     ofPixels pixels;
     compositeFbo.readToPixels(pixels);
     ofSaveImage(pixels, ofFilePath::getUserHomeDir()+"/Documents/bells2/snapshot-"+ofGetTimestampString()+".png", OF_IMAGE_QUALITY_BEST);
+  }
+  if (key == 'V') {
+    plotVisible = !plotVisible;
+    return;
+  }
+  if (key == 'v') {
+    plot.save(ofGetWindowWidth(), ofToDataPath("plot-" + ofGetTimestampString() + ".svg"));
   }
 }
 

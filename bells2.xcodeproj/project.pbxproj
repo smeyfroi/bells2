@@ -35,6 +35,7 @@
 		"A8FCF458-BB37-42A0-AED4-209506556A74" /* OscPrintReceivedElements.cpp in Sources */ = {isa = PBXBuildFile; fileRef = "EA28B6F8-53DB-446E-8196-F0A4C7C97292" /* OscPrintReceivedElements.cpp */; };
 		AAB103F92C8AF5B80046D316 /* Introspection.cpp in Sources */ = {isa = PBXBuildFile; fileRef = AAB103F82C8AF5B80046D316 /* Introspection.cpp */; };
 		AAB103FC2C90D32F0046D316 /* Divider.cpp in Sources */ = {isa = PBXBuildFile; fileRef = AAB103FA2C90D32F0046D316 /* Divider.cpp */; };
+		AAB103FF2C9DCD920046D316 /* Plot.cpp in Sources */ = {isa = PBXBuildFile; fileRef = AAB103FD2C9DCD920046D316 /* Plot.cpp */; };
 		"B174EC0A-78DE-4FFF-91D7-2A223304D82B" /* ofxInputField.cpp in Sources */ = {isa = PBXBuildFile; fileRef = "62942F7F-1115-44A2-8354-A2DD641C786E" /* ofxInputField.cpp */; };
 		"B20F6115-7CD7-4935-9650-8FB9C08F362F" /* ofxLabel.cpp in Sources */ = {isa = PBXBuildFile; fileRef = "0F9C0E8F-16F0-42E9-A9B8-26BC761657A7" /* ofxLabel.cpp */; };
 		"B69FCDF6-433F-4CAE-8CFE-9886369CD619" /* Plots.cpp in Sources */ = {isa = PBXBuildFile; fileRef = "D7B3A780-9561-40C6-A0D4-37F0BF6D032F" /* Plots.cpp */; };
@@ -147,6 +148,8 @@
 		AAB103F82C8AF5B80046D316 /* Introspection.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = Introspection.cpp; sourceTree = "<group>"; };
 		AAB103FA2C90D32F0046D316 /* Divider.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = Divider.cpp; sourceTree = "<group>"; };
 		AAB103FB2C90D32F0046D316 /* Divider.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = Divider.hpp; sourceTree = "<group>"; };
+		AAB103FD2C9DCD920046D316 /* Plot.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = Plot.cpp; sourceTree = "<group>"; };
+		AAB103FE2C9DCD920046D316 /* Plot.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = Plot.hpp; sourceTree = "<group>"; };
 		"AAED6A36-A254-427D-A7A1-CE9D29A3E1F8" /* ofxSelfOrganizingMap.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = ofxSelfOrganizingMap.cpp; path = ../../../addons/ofxSelfOrganizingMap/src/ofxSelfOrganizingMap.cpp; sourceTree = SOURCE_ROOT; };
 		"AB7DC390-3AE9-4A7D-B31E-51A285EAF038" /* ofxTCPClient.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = ofxTCPClient.cpp; path = ../../../addons/ofxNetwork/src/ofxTCPClient.cpp; sourceTree = SOURCE_ROOT; };
 		"ACC8BA74-FF68-496D-A200-BB0AD19C286F" /* OscPacketListener.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = OscPacketListener.h; path = ../../../addons/ofxOsc/libs/oscpack/src/osc/OscPacketListener.h; sourceTree = SOURCE_ROOT; };
@@ -530,6 +533,8 @@
 				AAB103F72C8AF5B80046D316 /* Introspection.hpp */,
 				AAB103FA2C90D32F0046D316 /* Divider.cpp */,
 				AAB103FB2C90D32F0046D316 /* Divider.hpp */,
+				AAB103FD2C9DCD920046D316 /* Plot.cpp */,
+				AAB103FE2C9DCD920046D316 /* Plot.hpp */,
 			);
 			path = src;
 			sourceTree = SOURCE_ROOT;
@@ -688,6 +693,7 @@
 				"4407C74E-E10C-4F03-9A00-BBE6235D2734" /* ofxOscParameterSync.cpp in Sources */,
 				"835D7E6E-BC94-46A9-83D2-0DAD9CA234B4" /* ofxOscReceiver.cpp in Sources */,
 				AAB103FC2C90D32F0046D316 /* Divider.cpp in Sources */,
+				AAB103FF2C9DCD920046D316 /* Plot.cpp in Sources */,
 				"A48D8C46-A66C-4DFD-9227-E8C1356F2943" /* ofxOscSender.cpp in Sources */,
 				"3EA93241-C162-4E08-98F2-4D78F056F35A" /* ofxHistoryPlot.cpp in Sources */,
 				"2D972833-5001-47B0-8262-9E5057BADAA8" /* BaseClient.cpp in Sources */,
