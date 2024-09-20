@@ -38,7 +38,7 @@ class ArcShape : public Shape {
 public:
   ArcShape(float x_, float y_, float r_, float angleBegin_, float angleEnd_, ofColor color_, uint64_t lifetime_) :
     Shape(color_, lifetime_), x(x_), y(y_), r(r_), angleBegin(angleBegin_), angleEnd(angleEnd_) {};
-  void draw() override { ofPath path; path.arc(x, y, r, r, angleBegin, angleEnd); };
+  void draw() override { ofPolyline path; path.arc(x, y, r, r, angleBegin, angleEnd); path.draw(); };
 private:
   float x, y, r;
   float angleBegin, angleEnd;
