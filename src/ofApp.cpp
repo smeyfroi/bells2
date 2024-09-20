@@ -22,21 +22,27 @@ void ofApp::setup(){
   
   fluidSimulation.setup({ Constants::FLUID_WIDTH, Constants::FLUID_HEIGHT });
   
-  foregroundLinesFbo.allocate(Constants::CANVAS_WIDTH, Constants::CANVAS_HEIGHT, GL_RGBA);
+  foregroundLinesFbo.allocate(Constants::CANVAS_WIDTH, Constants::CANVAS_HEIGHT, GL_RGBA32F);
   foregroundLinesFbo.clearColorBuffer(ofFloatColor(0.0, 0.0, 0.0, 0.0));
   foregroundFbo.allocate(Constants::CANVAS_WIDTH, Constants::CANVAS_HEIGHT, GL_RGBA32F);
   foregroundFbo.clearColorBuffer(ofFloatColor(0.0, 0.0, 0.0, 0.0));
   foregroundMaskFbo.allocate(Constants::CANVAS_WIDTH, Constants::CANVAS_HEIGHT, GL_R8);
   maskShader.load();
 
-  parameters.add(fluidSimulation.getParameterGroup());
+  auto fluidParameterGroup = fluidSimulation.getParameterGroup();
+  fluidParameterGroup.getFloat("dt").set(0.03);
+  fluidParameterGroup.getFloat("vorticity").set(15.0);
+  fluidParameterGroup.getFloat("value:dissipation").set(0.9975);
+  fluidParameterGroup.getFloat("velocity:dissipation").set(0.9999);
+  fluidParameterGroup.getInt("pressure:iterations").set(22);
+  parameters.add(fluidParameterGroup);
   gui.setup(parameters);
 
   ofxTimeMeasurements::instance()->setEnabled(false);
 }
 
 //--------------------------------------------------------------
-const int NUM_CLUSTER_CENTRES = 14; //14;
+const int NUM_CLUSTER_CENTRES = 18;
 const int CLUSTER_SOURCE_SAMPLES_MAX = 3000; // Note: 1600 raw samples per frame at 30fps
 const float POINT_DECAY_RATE = 0.3;
 const float SAME_CLUSTER_TOLERANCE = 1.0/10.0;
@@ -55,14 +61,14 @@ void ofApp::update() {
   // fade foreground lines
   foregroundLinesFbo.begin();
   ofEnableBlendMode(OF_BLENDMODE_ALPHA);
-  ofSetColor(ofFloatColor(0.0, 0.0, 0.0, 0.05));
+  ofSetColor(ofFloatColor(0.0, 0.0, 0.0, 0.07));
   ofDrawRectangle(0.0, 0.0, foregroundLinesFbo.getWidth(), foregroundLinesFbo.getHeight());
   foregroundLinesFbo.end();
 
   // fade foreground
   foregroundFbo.begin();
   ofEnableBlendMode(OF_BLENDMODE_ALPHA);
-  ofSetColor(ofFloatColor(0.0, 0.0, 0.0, 0.007));
+  ofSetColor(ofFloatColor(0.0, 0.0, 0.0, 0.005));
   ofDrawRectangle(0.0, 0.0, foregroundFbo.getWidth(), foregroundFbo.getHeight());
   foregroundFbo.end();
 
@@ -80,9 +86,9 @@ void ofApp::update() {
     TS_STOP("update-som");
 
     ofFloatColor somColor = somColorAt(s, t);
-    ofFloatColor darkSomColor = somColor; darkSomColor.setBrightness(0.2); darkSomColor.setSaturation(1.0);
+    ofFloatColor darkSomColor = somColor; darkSomColor.setBrightness(0.25); darkSomColor.setSaturation(1.0);
 
-    // Draw foreground mark for raw audio data sample in darkened saturated SOM color
+    // Draw foreground mark for raw audio data sample in darkened SOM color
     foregroundFbo.begin();
     {
       ofSetCircleResolution(DEFAULT_CIRCLE_RESOLUTION);
@@ -143,10 +149,10 @@ void ofApp::update() {
     
     // Make fine structure from some recent notes
     const std::vector<uint32_t>& recentNoteXYIds = std::get<1>(clusterResults);
-    if (recentNoteXYs.size() > 100) {
+    if (recentNoteXYs.size() > 70) {
       
       // find some number of note clusters
-      for (int i = 0; i < 5; i++) {
+      for (int i = 0; i < 7; i++) {
         
         std::vector<uint32_t> sameClusterNoteIds; // collect note IDs all from the same cluster
         size_t id = ofRandom(recentNoteXYIds.size()); // start with a random note TODO: don't use ofRandom
@@ -154,7 +160,7 @@ void ofApp::update() {
         uint32_t clusterId = recentNoteXYIds[id];
         
         // pick a number of additional random notes and keep if from this cluster
-        for(int i = 0; i < 12; i++) {
+        for(int i = 0; i < 13; i++) {
           id = ofRandom(recentNoteXYIds.size());
           if (recentNoteXYIds[id] == clusterId) {
             sameClusterNoteIds.push_back(id);
@@ -196,7 +202,7 @@ void ofApp::update() {
           path.translate({ -pathBounds.x, -pathBounds.y });
           
           // scale up to some limit
-          constexpr float MAX_SCALE = 2.0;
+          constexpr float MAX_SCALE = 3.0;
           float scaleX = std::fminf(MAX_SCALE, 1.0 / pathBounds.width);
           float scaleY = std::fminf(MAX_SCALE, 1.0 / pathBounds.height);
           path.scale(scaleX, scaleY);
@@ -231,7 +237,7 @@ void ofApp::update() {
           
           // draw extended outlines in the foreground (saving them for redrawing into fluid)
           std::vector<std::tuple<glm::vec2, glm::vec2>> extendedLines;
-          float width = 10 * 1.0 / foregroundLinesFbo.getWidth();
+          float width = 15 * 1.0 / foregroundLinesFbo.getWidth();
           foregroundLinesFbo.begin();
           ofEnableBlendMode(OF_BLENDMODE_ALPHA);
           ofSetColor(ofColor::black);
@@ -276,11 +282,12 @@ void ofApp::update() {
           // redraw extended lines into the fluid layer
           fluidSimulation.getFlowValuesFbo().getSource().begin();
           ofEnableBlendMode(OF_BLENDMODE_ALPHA);
-          ofSetColor(ofFloatColor(0.0, 0.0, 0.0, 0.4));
+          ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 0.7));
+//          ofSetColor(ofFloatColor(0.0, 0.0, 0.0, 0.4));
           ofPushMatrix();
           ofScale(Constants::FLUID_WIDTH, Constants::FLUID_HEIGHT);
           {
-            float width = 1.5 * 1.0 / Constants::FLUID_WIDTH;
+            float width = 1.0 * 1.0 / Constants::FLUID_WIDTH;
             for (const auto& line : extendedLines) {
               glm::vec2 p1 = std::get<0>(line); glm::vec2 p2 = std::get<1>(line);
               ofPushMatrix();
@@ -301,7 +308,7 @@ void ofApp::update() {
     fluidSimulation.getFlowValuesFbo().getSource().begin();
     ofEnableBlendMode(OF_BLENDMODE_ADD);
     ofNoFill();
-    ofSetColor(ofFloatColor(0.1, 0.1, 0.1, 0.5));
+    ofSetColor(ofFloatColor(0.1, 0.1, 0.1, 0.6));
     for (auto& p: clusterCentres) {
       if (p.w < 5.0) continue;
       ofDrawCircle(p.x * Constants::FLUID_WIDTH, p.y * Constants::FLUID_HEIGHT, u * 100.0);

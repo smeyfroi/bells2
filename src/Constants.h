@@ -12,7 +12,7 @@ struct Constants {
   static const size_t FLUID_WIDTH = WINDOW_WIDTH * 2.2;
   static const size_t FLUID_HEIGHT = WINDOW_HEIGHT * 2.2;
   
-  static const size_t SOM_WIDTH = 128;
-  static const size_t SOM_HEIGHT = 128;
+  static const size_t SOM_WIDTH = 256;
+  static const size_t SOM_HEIGHT = 256;
 
 };
