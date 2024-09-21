@@ -5,6 +5,8 @@
 #include "ofGraphics.h"
 #include "ofPath.h"
 
+const int ARC_RESOLUTION = 512;
+
 class Shape {
 public:
   Shape(ofColor color_, uint64_t lifetime_) : color(color_), lifetime(lifetime_) {};
@@ -38,7 +40,7 @@ class ArcShape : public Shape {
 public:
   ArcShape(float x_, float y_, float r_, float angleBegin_, float angleEnd_, ofColor color_, uint64_t lifetime_) :
     Shape(color_, lifetime_), x(x_), y(y_), r(r_), angleBegin(angleBegin_), angleEnd(angleEnd_) {};
-  void draw() override { ofPolyline path; path.arc(x, y, r, r, angleBegin, angleEnd); path.draw(); };
+  void draw() override { ofPolyline path; path.arc(x, y, r, r, angleBegin, angleEnd, ARC_RESOLUTION); path.draw(); };
 private:
   float x, y, r;
   float angleBegin, angleEnd;

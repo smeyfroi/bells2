@@ -4,12 +4,16 @@
 #include "ofxTimeMeasurements.h"
 #include "dkm.hpp"
 
+const int DEFAULT_CIRCLE_RESOLUTION = 32;
+const int FOREGROUND_CIRCLE_RESOLUTION = 512;
+
 //--------------------------------------------------------------
 void ofApp::setup(){
   ofSetVerticalSync(false);
   ofEnableAlphaBlending();
   ofDisableArbTex(); // required for texture2D to work in GLSL, makes texture coords normalized
   ofSetFrameRate(Constants::FRAME_RATE);
+  ofSetCircleResolution(DEFAULT_CIRCLE_RESOLUTION);
   TIME_SAMPLE_SET_FRAMERATE(Constants::FRAME_RATE);
 
   double minInstance[3] = { 0.0, 0.0, 0.0 };
@@ -48,8 +52,6 @@ const int NUM_CLUSTER_CENTRES = 18;
 const int CLUSTER_SOURCE_SAMPLES_MAX = 3000; // Note: 1600 raw samples per frame at 30fps
 const float POINT_DECAY_RATE = 0.3;
 const float SAME_CLUSTER_TOLERANCE = 1.0/10.0;
-const int DEFAULT_CIRCLE_RESOLUTION = 32;
-const int FOREGROUND_CIRCLE_RESOLUTION = 4096;
 
 void ofApp::update() {
   TS_START("update-introspection");
@@ -93,7 +95,6 @@ void ofApp::update() {
     // Draw foreground mark for raw audio data sample in darkened SOM color
     foregroundFbo.begin();
     {
-      ofSetCircleResolution(DEFAULT_CIRCLE_RESOLUTION);
       ofEnableBlendMode(OF_BLENDMODE_DISABLED);
       ofSetColor(darkSomColor);
       ofDrawCircle(s*foregroundFbo.getWidth(), t*foregroundFbo.getHeight(), 10.0);
@@ -103,7 +104,6 @@ void ofApp::update() {
     // Draw fluid mark for raw audio data sample in darkened SOM color
     fluidSimulation.getFlowValuesFbo().getSource().begin();
     {
-      ofSetCircleResolution(DEFAULT_CIRCLE_RESOLUTION);
       ofEnableBlendMode(OF_BLENDMODE_DISABLED);
       ofSetColor(darkSomColor);
       ofDrawCircle(s*Constants::FLUID_WIDTH, t*Constants::FLUID_HEIGHT, 3.0);
@@ -327,7 +327,6 @@ void ofApp::update() {
     }
 
     // draw circles around longer-lasting clusterCentres into fluid layer
-    ofSetCircleResolution(DEFAULT_CIRCLE_RESOLUTION);
     fluidSimulation.getFlowValuesFbo().getSource().begin();
     ofEnableBlendMode(OF_BLENDMODE_ADD);
     ofNoFill();
@@ -399,8 +398,6 @@ void ofApp::update() {
     foregroundFbo.begin();
     ofEnableBlendMode(OF_BLENDMODE_ALPHA);
     ofNoFill();
-    ofSetCircleResolution(FOREGROUND_CIRCLE_RESOLUTION);
-    ofSetCurveResolution(FOREGROUND_CIRCLE_RESOLUTION);
     for (auto& p: clusterCentres) {
       if (p.w < 4.0) continue;
       ofFloatColor somColor = somColorAt(p.x, p.y);
@@ -409,27 +406,21 @@ void ofApp::update() {
       ofSetColor(darkSomColor);
       ofPolyline path;
       float radius = std::fmod(p.w*5.0, 480);
-      path.arc(p.x*foregroundFbo.getWidth(), p.y*foregroundFbo.getHeight(), radius, radius, -180.0*(u+p.x), 180.0*(v+p.y));
+      path.arc(p.x*foregroundFbo.getWidth(), p.y*foregroundFbo.getHeight(), radius, radius, -180.0*(u+p.x), 180.0*(v+p.y), FOREGROUND_CIRCLE_RESOLUTION);
       path.draw();
     }
-    ofSetCircleResolution(DEFAULT_CIRCLE_RESOLUTION);
-    ofSetCurveResolution(DEFAULT_CIRCLE_RESOLUTION);
     foregroundFbo.end();
   }
   
   // plot arcs around longer-lasting clusterCentres
   {
 //    ofNoFill();
-    ofSetCircleResolution(FOREGROUND_CIRCLE_RESOLUTION);
-    ofSetCurveResolution(FOREGROUND_CIRCLE_RESOLUTION);
     for (auto& p: clusterCentres) {
       if (p.w < 4.0) continue;
       float radius = std::fmod(p.w*5.0/Constants::CANVAS_WIDTH, 480.0/Constants::CANVAS_WIDTH);
       auto arcPtr = std::unique_ptr<Shape>(new ArcShape(p.x, p.y, radius, -180.0*(u+p.x), 180.0*(v+p.y), ofColor::blue, 100));
       plot.addShapePtr(std::move(arcPtr));
     }
-    ofSetCircleResolution(DEFAULT_CIRCLE_RESOLUTION);
-    ofSetCurveResolution(DEFAULT_CIRCLE_RESOLUTION);
   }
   
   // plot divisions
