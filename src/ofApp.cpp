@@ -281,6 +281,27 @@ void ofApp::update() {
           ofPopMatrix();
           foregroundLinesFbo.end();
           
+          // plot connected clustered notes
+          {
+            uint32_t lastNoteId = *(sameClusterNoteIds.end() - 1);
+            auto lastNote = recentNoteXYs[lastNoteId];
+            for (uint32_t id : sameClusterNoteIds) {
+              const auto& note = recentNoteXYs[id];
+              auto linePtr = std::unique_ptr<Shape>(new LineShape(lastNote[0], lastNote[1], note[0], note[1], ofColor::red, 80));
+              plot.addShapePtr(std::move(linePtr));
+              lastNote = note;
+            }
+          }
+
+          // plot extended lines
+          {
+            for (const auto& line : extendedLines) {
+              glm::vec2 p1 = std::get<0>(line); glm::vec2 p2 = std::get<1>(line);
+              auto linePtr = std::unique_ptr<Shape>(new LineShape(p1.x, p1.y, p2.x, p2.y, ofColor::green, 20));
+              plot.addShapePtr(std::move(linePtr));
+            }
+          }
+          
           // redraw extended lines into the fluid layer
           fluidSimulation.getFlowValuesFbo().getSource().begin();
           ofEnableBlendMode(OF_BLENDMODE_ALPHA);
@@ -388,13 +409,38 @@ void ofApp::update() {
       ofSetColor(darkSomColor);
       ofPolyline path;
       float radius = std::fmod(p.w*5.0, 480);
-      path.arc(p.x*foregroundFbo.getWidth(), p.y*foregroundFbo.getHeight(), radius, radius, -180*(u+p.x), 180.0*(v+p.y));
+      path.arc(p.x*foregroundFbo.getWidth(), p.y*foregroundFbo.getHeight(), radius, radius, -180.0*(u+p.x), 180.0*(v+p.y));
       path.draw();
     }
     ofSetCircleResolution(DEFAULT_CIRCLE_RESOLUTION);
     ofSetCurveResolution(DEFAULT_CIRCLE_RESOLUTION);
     foregroundFbo.end();
   }
+  
+  // plot arcs around longer-lasting clusterCentres
+  {
+//    ofNoFill();
+    ofSetCircleResolution(FOREGROUND_CIRCLE_RESOLUTION);
+    ofSetCurveResolution(FOREGROUND_CIRCLE_RESOLUTION);
+    for (auto& p: clusterCentres) {
+      if (p.w < 4.0) continue;
+      float radius = std::fmod(p.w*5.0/Constants::CANVAS_WIDTH, 480.0/Constants::CANVAS_WIDTH);
+      auto arcPtr = std::unique_ptr<Shape>(new ArcShape(p.x, p.y, radius, -180.0*(u+p.x), 180.0*(v+p.y), ofColor::blue, 100));
+      plot.addShapePtr(std::move(arcPtr));
+    }
+    ofSetCircleResolution(DEFAULT_CIRCLE_RESOLUTION);
+    ofSetCurveResolution(DEFAULT_CIRCLE_RESOLUTION);
+  }
+  
+  // plot divisions
+  {
+    for(auto& l : divider.getDivisionLines()) {
+      auto linePtr = std::unique_ptr<Shape>(new LineShape(l.x1, l.y1, l.x2, l.y2, ofColor::black, 10));
+      plot.addShapePtr(std::move(linePtr));
+    }
+  }
+
+  plot.update();
 
   {
     TS_START("update-fluid-clusters");
@@ -427,8 +473,6 @@ ofFloatColor ofApp::somColorAt(float x, float y) const {
 //--------------------------------------------------------------
 void ofApp::draw() {
   if (plotVisible) {
-    std::unique_ptr<CircleShape> shapePtr(new CircleShape { ofRandom(1.0), ofRandom(1.0), 0.05, ofColor::black, 1000 });
-    plot.addShapePtr(std::move(shapePtr));
     ofClear(255, 255);
     ofPushMatrix();
     plot.draw(ofGetWindowWidth());
@@ -503,7 +547,7 @@ void ofApp::keyPressed(int key){
     if (plotKeyPressed || spectrumPlotKeyPressed) return;
   }
   if (introspection.keyPressed(key)) return;
-  if (key == 's') {
+  if (key == 'S') {
     ofFbo compositeFbo;
     compositeFbo.allocate(Constants::CANVAS_WIDTH, Constants::CANVAS_HEIGHT, GL_RGB);
     compositeFbo.begin();
@@ -537,12 +581,12 @@ void ofApp::keyPressed(int key){
     compositeFbo.readToPixels(pixels);
     ofSaveImage(pixels, ofFilePath::getUserHomeDir()+"/Documents/bells2/snapshot-"+ofGetTimestampString()+".png", OF_IMAGE_QUALITY_BEST);
   }
-  if (key == 'V') {
+  if (key == 'v') {
     plotVisible = !plotVisible;
     return;
   }
-  if (key == 'v') {
-    plot.save(ofGetWindowWidth(), ofToDataPath("plot-" + ofGetTimestampString() + ".svg"));
+  if (key == 'V') {
+    plot.save(ofGetWindowWidth(), ofFilePath::getUserHomeDir()+"/Documents/bells2/plot-"+ofGetTimestampString()+".svg");
   }
 }
 
