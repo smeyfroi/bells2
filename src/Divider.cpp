@@ -20,8 +20,40 @@ DivisionLine::DivisionLine(float refX1_, float refY1_, float refX2_, float refY2
   refX1(refX1_), refY1(refY1_), refX2(refX2_), refY2(refY2_),
   x1(0.0), y1(yForLineAtX(0.0, refX1, refY1, refX2, refY2)),
   x2(1.0), y2(yForLineAtX(1.0, refX1, refY1, refX2, refY2)),
+  xNorth(xForLineAtY(0.0, refX1, refY1, refX2, refY2)),
+  xSouth(xForLineAtY(1.0, refX1, refY1, refX2, refY2)),
+  yWest(yForLineAtX(0.0, refX1, refY1, refX2, refY2)),
+  yEast(yForLineAtX(1.0, refX1, refY1, refX2, refY2)),
   age(0)
 {};
+
+bool DivisionLine::isEqual(const DivisionLine& right) const {
+  return ((std::abs(refX1-right.refX1) < EPSILON
+          && std::abs(refY1-right.refY1) < EPSILON
+          && std::abs(refX2-right.refX2) < EPSILON
+          && std::abs(refY2-right.refY2) < EPSILON)
+          ||
+          (std::abs(refX2-right.refX1) < EPSILON
+          && std::abs(refY2-right.refY1) < EPSILON
+          && std::abs(refX1-right.refX2) < EPSILON
+          && std::abs(refY1-right.refY2) < EPSILON));
+}
+
+bool DivisionLine::isRefPointEqual(float x, float y) const {
+  return (std::abs(refX1-x) < EPSILON && std::abs(refY1-y) < EPSILON)
+    || (std::abs(refX2-x) < EPSILON && std::abs(refY2-y) < EPSILON);
+}
+bool DivisionLine::isRefPointCloseTo(float x, float y) const {
+  return ((ofDistSquared(refX1, refY1, x, y) < CLOSE_TOLERANCE_SQUARED)
+          || (ofDistSquared(refX2, refY2, x, y) < CLOSE_TOLERANCE_SQUARED));
+}
+// TODO: this misses closeness for y=0 (top and bottom)
+bool DivisionLine::isEndCloseTo(const DivisionLine& line) const {
+  return ((ofDistSquared(0.0, yWest, 0.0, line.yWest) < CLOSE_TOLERANCE_SQUARED)
+          || (ofDistSquared(1.0, yEast, 1.0, line.yEast) < CLOSE_TOLERANCE_SQUARED)
+          || (ofDistSquared(xNorth, 0.0, line.xNorth, 0.0) < CLOSE_TOLERANCE_SQUARED)
+          || (ofDistSquared(xSouth, 1.0, line.xSouth, 1.0) < CLOSE_TOLERANCE_SQUARED));
+}
 
 bool DivisionLine::isValid() const {
   return (ofDist(refX1, refY1, refX2, refY2) > EPSILON);
@@ -34,6 +66,10 @@ void DivisionLine::draw(float width) const {
   ofDrawRectangle(-1.0, -width/2.0, ofDist(x1, y1, x2, y2)+1.0, width);
   ofPopMatrix();
 }
+
+//bool operator == (const DivisionLine& left, const DivisionLine& right) {
+//  return (left.isEqual(right));
+//}
 
 
 
@@ -62,7 +98,7 @@ std::optional<glm::vec4> Divider::findPointCloseTo(const std::vector<glm::vec4>&
 bool Divider::isRefPointInLines(float x, float y) const {
   return std::any_of(lines.begin(),
                      lines.end(),
-                     [&] (const auto& l) { return (l.isRefPoint(x, y)); });
+                     [&] (const auto& l) { return (l.isRefPointEqual(x, y)); });
 }
 
 bool Divider::isLineInLines(const DivisionLine& line) const {
@@ -75,7 +111,8 @@ bool Divider::isLineCloseToLines(const DivisionLine& line) const {
   return std::any_of(lines.begin(),
                      lines.end(),
                      [&](const auto& l) {
-    return (l.isRefPointCloseTo(line.refX1, line.refY1) || l.isRefPointCloseTo(line.refX2, line.refY2));
+    return (l.isRefPointCloseTo(line.refX1, line.refY1) || l.isRefPointCloseTo(line.refX2, line.refY2) ||
+            (l.isEndCloseTo(line)));
   });
 }
 
@@ -162,17 +199,18 @@ bool Divider::update(std::vector<glm::vec4>& points) {
         || !isPointInPoints(line.refX2, line.refY2, points))) {
       // line no longer connects valid points so find a nearby equivalent using points not in use, retaining the existing line if no valid replacement
       auto newLine = findNewDivisionLineCloseTo(points, line.refX1, line.refY1, line.refX2, line.refY2);
-      if (newLine.isValid() && !isLineInLines(newLine)) {
+      if (isLineEligible(newLine)) {
         line = newLine;
         linesChanged = true;
+        break;
       }
     }
   }
   
   // reverse sort points by age (w) so make new lines from more stable points
-//  std::sort(points.begin(),
-//            points.end(),
-//            [](const glm::vec4& a, const glm::vec4& b) { return a.w > b.w; });
+  std::sort(points.begin(),
+            points.end(),
+            [](const glm::vec4& a, const glm::vec4& b) { return a.w > b.w; });
 
   // find new divisions to replace any invalid ones
   if (points.size() < 3) return linesChanged;
@@ -181,9 +219,12 @@ bool Divider::update(std::vector<glm::vec4>& points) {
     glm::vec4 p1 = points[ofRandom(points.size())];
     glm::vec4 p2 = points[ofRandom(points.size())];
     DivisionLine newLine { p1.x, p1.y, p2.x, p2.y };
-    if (!isLineEligible(newLine)) continue;
-    line = newLine;
-    linesChanged = true;
+    if (isLineEligible(newLine)) {
+      line = newLine;
+      linesChanged = true;
+      break;
+    }
   }
+  
   return linesChanged;
 }

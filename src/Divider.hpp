@@ -10,37 +10,25 @@ static constexpr float EPSILON = std::numeric_limits<float>::epsilon();
 const float CLOSE_TOLERANCE_SQUARED = std::pow(1.0 / 10.0, 2.0);
 
 // x1,y1 and x2,y2 are normalised coords; ref coords can be anything
-struct DivisionLine {
+class DivisionLine {
+public:
   DivisionLine() : DivisionLine(0.0, 0.0, 0.0, 0.0) {};
   DivisionLine(float refX1_, float refY1_, float refX2_, float refY2_);
-  int64_t age;
-  float refX1, refY1, refX2, refY2;
-  float x1, x2, y1, y2;
-  inline bool isEqual(const DivisionLine& right) const {
-    return ((std::abs(refX1-right.refX1) < EPSILON
-            && std::abs(refY1-right.refY1) < EPSILON
-            && std::abs(refX2-right.refX2) < EPSILON
-            && std::abs(refY2-right.refY2) < EPSILON)
-            ||
-            (std::abs(refX2-right.refX1) < EPSILON
-            && std::abs(refY2-right.refY1) < EPSILON
-            && std::abs(refX1-right.refX2) < EPSILON
-            && std::abs(refY1-right.refY2) < EPSILON));
-  }
-  inline bool isRefPoint(float x, float y) const {
-    return (std::abs(refX1-x) < EPSILON && std::abs(refY1-y) < EPSILON)
-      || (std::abs(refX2-x) < EPSILON && std::abs(refY2-y) < EPSILON);
-  }
-  inline bool isRefPointCloseTo(float x, float y) const {
-    return ((ofDistSquared(refX1, refY1, x, y) < CLOSE_TOLERANCE_SQUARED)
-            || (ofDistSquared(refX2, refY2, x, y) < CLOSE_TOLERANCE_SQUARED));
-  }
+  bool isEqual(const DivisionLine& right) const;
+  bool isRefPointEqual(float x, float y) const;
+  bool isRefPointCloseTo(float x, float y) const;
+  bool isEndCloseTo(const DivisionLine& line) const;
   bool isValid() const;
   void draw(float width) const;
+public:
+  // TODO: refactor to make these private
+  float refX1, refY1, refX2, refY2;
+  float x1, x2, y1, y2; // normalised
+private:
+  float xNorth, xSouth, yWest, yEast; // normalised
+  int64_t age;
 };
-//bool operator == (const DivisionLine& left, const DivisionLine& right) {
-//  return (left.isEqual(right));
-//}
+
 
 
 class Divider {

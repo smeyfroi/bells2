@@ -64,7 +64,7 @@ private:
   std::tuple<std::vector<std::array<float, 2>>, std::vector<uint32_t>> clusterResults;
   std::vector<glm::vec4> clusterCentres;
   
-  Divider divider { 5 };
+  Divider divider { 7 };
   
   Plot plot;
   bool plotVisible;
