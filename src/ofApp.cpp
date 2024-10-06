@@ -5,7 +5,7 @@
 #include "dkm.hpp"
 
 const int DEFAULT_CIRCLE_RESOLUTION = 32;
-const int FOREGROUND_CIRCLE_RESOLUTION = 512;
+const int FOREGROUND_CIRCLE_RESOLUTION = 96;
 
 //--------------------------------------------------------------
 void ofApp::setup(){
@@ -40,6 +40,11 @@ void ofApp::setup(){
   fluidParameterGroup.getFloat("velocity:dissipation").set(0.9999);
   fluidParameterGroup.getInt("pressure:iterations").set(22);
   parameters.add(fluidParameterGroup);
+  
+  parameters.add(validLowerRmsParameter);
+  parameters.add(validLowerPitchParameter);
+  parameters.add(validUpperPitchParameter);
+  
   gui.setup(parameters);
   
   plotVisible = false;
@@ -81,7 +86,13 @@ void ofApp::update() {
   float u = audioDataProcessorPtr->getNormalisedScalarValue(ofxAudioAnalysisClient::AnalysisScalar::spectralKurtosis, 0.0, 25.0);
   float v = audioDataProcessorPtr->getNormalisedScalarValue(ofxAudioAnalysisClient::AnalysisScalar::spectralCentroid, 0.4, 6.0);
   
-  if (audioDataProcessorPtr->isDataValid()) {
+  std::vector<ofxAudioData::ValiditySpec> sampleValiditySpecs {
+    {ofxAudioAnalysisClient::AnalysisScalar::rootMeanSquare, false, validLowerRmsParameter},
+    {ofxAudioAnalysisClient::AnalysisScalar::pitch, false, validLowerPitchParameter},
+    {ofxAudioAnalysisClient::AnalysisScalar::pitch, true, validUpperPitchParameter}
+  };
+
+  if (audioDataProcessorPtr->isDataValid(sampleValiditySpecs)) {
     TS_START("update-som");
     {
       double instance[3] = { static_cast<double>(s), static_cast<double>(t), static_cast<double>(v) };
@@ -207,7 +218,7 @@ void ofApp::update() {
           constexpr float MAX_SCALE = 3.0;
           float scaleX = std::fminf(MAX_SCALE, 1.0 / pathBounds.width);
           float scaleY = std::fminf(MAX_SCALE, 1.0 / pathBounds.height);
-          path.scale(scaleX, scaleY);
+          path.scale(scaleX, scaleY); // FIXME: end up with asymmetric scaling
 
           // and make a mask from the path
           foregroundMaskFbo.begin();
@@ -268,15 +279,6 @@ void ofApp::update() {
               ofDrawRectangle(0.0, -width/2.0, ofDist(p1.x, p1.y, p2.x, p2.y), width);
               ofPopMatrix();
             }
-            //          for (uint32_t id : chosenNoteIds) {
-            //            const auto& note = recentNoteXYs[id];
-            //            float x = note[0]; float y = note[1];
-            //            ofPushMatrix();
-            //            ofTranslate(x1, y1);
-            //            ofRotateRad(std::atan2((y2 - y1), (x2 - x1)));
-            //            ofDrawRectangle(-1.0, -width/2.0, ofDist(x1, y1, x2, y2)+1.0, width);
-            //            ofPopMatrix();
-            //          }
           }
           ofPopMatrix();
           foregroundLinesFbo.end();
@@ -287,7 +289,7 @@ void ofApp::update() {
             auto lastNote = recentNoteXYs[lastNoteId];
             for (uint32_t id : sameClusterNoteIds) {
               const auto& note = recentNoteXYs[id];
-              auto linePtr = std::unique_ptr<Shape>(new LineShape(lastNote[0], lastNote[1], note[0], note[1], ofColor::red, 80));
+              auto linePtr = std::unique_ptr<Shape>(new LineShape(lastNote[0], lastNote[1], note[0], note[1], ofColor::red, 50));
               plot.addShapePtr(std::move(linePtr));
               lastNote = note;
             }
@@ -306,7 +308,6 @@ void ofApp::update() {
           fluidSimulation.getFlowValuesFbo().getSource().begin();
           ofEnableBlendMode(OF_BLENDMODE_ALPHA);
           ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 0.7));
-//          ofSetColor(ofFloatColor(0.0, 0.0, 0.0, 0.4));
           ofPushMatrix();
           ofScale(Constants::FLUID_WIDTH, Constants::FLUID_HEIGHT);
           {
@@ -414,11 +415,10 @@ void ofApp::update() {
   
   // plot arcs around longer-lasting clusterCentres
   {
-//    ofNoFill();
     for (auto& p: clusterCentres) {
       if (p.w < 4.0) continue;
       float radius = std::fmod(p.w*5.0/Constants::CANVAS_WIDTH, 480.0/Constants::CANVAS_WIDTH);
-      auto arcPtr = std::unique_ptr<Shape>(new ArcShape(p.x, p.y, radius, -180.0*(u+p.x), 180.0*(v+p.y), ofColor::blue, 100));
+      auto arcPtr = std::unique_ptr<Shape>(new ArcShape(p.x, p.y, radius, -180.0*(u+p.x), 180.0*(v+p.y), ofColor::blue, 30));
       plot.addShapePtr(std::move(arcPtr));
     }
   }
@@ -447,7 +447,7 @@ void ofApp::update() {
         { 0.0, 0.0 }, // velocity
         0.0003, // radialVelocity
         color,
-        10.0 // temperature
+        1.0 // temperature
       };
       fluidSimulation.applyImpulse(impulse);
     }
