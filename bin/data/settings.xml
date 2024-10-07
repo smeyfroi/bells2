@@ -1,12 +1,12 @@
 <?xml version="1.0"?>
 <group>
 	<Fluid_Simulation>
-		<dt>0.025</dt>
-		<vorticity>10</vorticity>
-		<value:dissipation>0.99801</value:dissipation>
-		<velocity:dissipation>0.9975</velocity:dissipation>
+		<dt>0.03</dt>
+		<vorticity>15</vorticity>
+		<value:dissipation>0.9975</value:dissipation>
+		<velocity:dissipation>0.9999</velocity:dissipation>
 		<temperature:dissipation>0.996</temperature:dissipation>
-		<pressure:iterations>20</pressure:iterations>
+		<pressure:iterations>22</pressure:iterations>
 		<Bouyancy>
 			<ambientTemperature>0</ambientTemperature>
 			<smokeBouyancy>1</smokeBouyancy>
@@ -15,4 +15,8 @@
 			<gravityForceY>-0.98</gravityForceY>
 		</Bouyancy>
 	</Fluid_Simulation>
+	<clusterCentres>12</clusterCentres>
+	<validLowerRms>2917.5</validLowerRms>
+	<validLowerPitch>50</validLowerPitch>
+	<validUpperPitch>5000</validUpperPitch>
 </group>

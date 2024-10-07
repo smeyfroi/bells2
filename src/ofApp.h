@@ -70,7 +70,7 @@ private:
   Plot plot;
   bool plotVisible;
   
-  Introspection introspection; // we add things to this in normalised coords
+  Introspection introspection; // add things to this in normalised coords
   
   bool guiVisible { false };
   ofxPanel gui;
@@ -78,8 +78,8 @@ private:
   ofParameter<float> validLowerRmsParameter { "validLowerRms", 300.0, 100.0, 5000.0 };
   ofParameter<float> validLowerPitchParameter { "validLowerPitch", 50.0, 50.0, 8000.0 };
   ofParameter<float> validUpperPitchParameter { "validUpperPitch", 5000.0, 50.0, 8000.0 };
+  ofParameter<int> clusterCentresParameter { "clusterCentres", 18, 2.0, 50.0 };
   
-  //  const int NUM_CLUSTER_CENTRES = 18;
   //  const int CLUSTER_SOURCE_SAMPLES_MAX = 3000; // Note: 1600 raw samples per frame at 30fps
   //  const float POINT_DECAY_RATE = 0.3;
   //  const float SAME_CLUSTER_TOLERANCE = 1.0/10.0;

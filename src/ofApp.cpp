@@ -33,6 +33,11 @@ void ofApp::setup(){
   foregroundMaskFbo.allocate(Constants::CANVAS_WIDTH, Constants::CANVAS_HEIGHT, GL_R8);
   maskShader.load();
 
+  parameters.add(clusterCentresParameter);
+  parameters.add(validLowerRmsParameter);
+  parameters.add(validLowerPitchParameter);
+  parameters.add(validUpperPitchParameter);
+  
   auto fluidParameterGroup = fluidSimulation.getParameterGroup();
   fluidParameterGroup.getFloat("dt").set(0.03);
   fluidParameterGroup.getFloat("vorticity").set(15.0);
@@ -40,10 +45,6 @@ void ofApp::setup(){
   fluidParameterGroup.getFloat("velocity:dissipation").set(0.9999);
   fluidParameterGroup.getInt("pressure:iterations").set(22);
   parameters.add(fluidParameterGroup);
-  
-  parameters.add(validLowerRmsParameter);
-  parameters.add(validLowerPitchParameter);
-  parameters.add(validUpperPitchParameter);
   
   gui.setup(parameters);
   
@@ -53,7 +54,6 @@ void ofApp::setup(){
 }
 
 //--------------------------------------------------------------
-const int NUM_CLUSTER_CENTRES = 18;
 const int CLUSTER_SOURCE_SAMPLES_MAX = 3000; // Note: 1600 raw samples per frame at 30fps
 const float POINT_DECAY_RATE = 0.3;
 const float SAME_CLUSTER_TOLERANCE = 1.0/10.0;
@@ -129,8 +129,8 @@ void ofApp::update() {
     introspection.addCircle(s, t, 1.0/Constants::WINDOW_WIDTH*5.0, ofColor::grey, true, 30); // introspection: small grey circle for new raw source sample
 
     TS_START("update-kmeans");
-    if (recentNoteXYs.size() > NUM_CLUSTER_CENTRES) {
-      dkm::clustering_parameters<float> params(NUM_CLUSTER_CENTRES);
+    if (recentNoteXYs.size() > clusterCentresParameter) {
+      dkm::clustering_parameters<float> params(clusterCentresParameter);
       params.set_random_seed(1000); // keep clusters stable
       clusterResults = dkm::kmeans_lloyd(recentNoteXYs, params);
     }
@@ -173,7 +173,7 @@ void ofApp::update() {
         uint32_t clusterId = recentNoteXYIds[id];
         
         // pick a number of additional random notes and keep if from this cluster
-        for(int i = 0; i < 13; i++) {
+        for(int i = 0; i < 17; i++) {
           id = ofRandom(recentNoteXYIds.size());
           if (recentNoteXYIds[id] == clusterId) {
             sameClusterNoteIds.push_back(id);
@@ -182,6 +182,7 @@ void ofApp::update() {
 
         // if we found enough related notes then draw something
         if (sameClusterNoteIds.size() > 2) {
+//          ofLogNotice() << sameClusterNoteIds.size();
           
           // make path from notes in normalised coords
           ofPath path;
@@ -218,8 +219,9 @@ void ofApp::update() {
           constexpr float MAX_SCALE = 3.0;
           float scaleX = std::fminf(MAX_SCALE, 1.0 / pathBounds.width);
           float scaleY = std::fminf(MAX_SCALE, 1.0 / pathBounds.height);
-          path.scale(scaleX, scaleY); // FIXME: end up with asymmetric scaling
-
+          float scale = std::fminf(scaleX, scaleY);
+          path.scale(scale, scale);
+          
           // and make a mask from the path
           foregroundMaskFbo.begin();
           {
@@ -227,9 +229,9 @@ void ofApp::update() {
             ofSetColor(255);
             path.setFilled(true);
             ofPushMatrix();
-            ofScale(foregroundMaskFbo.getWidth(), foregroundMaskFbo.getHeight());
+            ofScale(foregroundMaskFbo.getWidth(), foregroundMaskFbo.getHeight()); // from normalised to FBO size
             path.draw();
-            ofPushMatrix();
+            ofPopMatrix();
           }
           foregroundMaskFbo.end();
 
@@ -239,9 +241,11 @@ void ofApp::update() {
             {
               ofEnableBlendMode(OF_BLENDMODE_ADD);
               ofSetColor(216);
+//              ofSetColor(255, 0, 0, 255);
               ofPushMatrix();
-              ofScale(1.0 / scaleX, 1.0 / scaleY);
-              ofTranslate((pathBounds.x) * foregroundFbo.getWidth(), (pathBounds.y) * foregroundFbo.getHeight());
+              ofScale(1.0 / scale, 1.0 / scale); // TODO: scale needs to take into account the fluid scaling
+              ofTranslate(pathBounds.x * foregroundFbo.getWidth(), pathBounds.y * foregroundFbo.getHeight());
+//              foregroundMaskFbo.draw(0, 0);
               maskShader.render(frozenFluid, foregroundMaskFbo, foregroundFbo.getWidth(), foregroundFbo.getHeight());
               ofPopMatrix();
             }
@@ -468,55 +472,59 @@ void ofApp::draw() {
     ofPushMatrix();
     plot.draw(ofGetWindowWidth());
     ofPopMatrix();
-    return;
-  }
-  
-  ofPushStyle();
-  ofClear(0, 255);
-  
-  // fluid
-  {
-    ofEnableBlendMode(OF_BLENDMODE_ALPHA);
-    ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 1.0));
-    fluidSimulation.getFlowValuesFbo().getSource().draw(0.0, 0.0, Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT);
-  }
-  
-  // foreground
-  {
-    ofEnableBlendMode(OF_BLENDMODE_ALPHA);
-    ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 1.0));
-    foregroundFbo.draw(0, 0, Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT);
-  }
-  
-  // foreground lines
-  {
-    ofEnableBlendMode(OF_BLENDMODE_ALPHA);
-    ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 1.0));
-    foregroundLinesFbo.draw(0, 0, Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT);
+    
+  } else {
+    ofPushStyle();
+    ofClear(0, 255);
+    
+    // fluid
+    {
+      ofEnableBlendMode(OF_BLENDMODE_ALPHA);
+      ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 1.0));
+      fluidSimulation.getFlowValuesFbo().getSource().draw(0.0, 0.0, Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT);
+    }
+    
+    // foreground
+    {
+      ofEnableBlendMode(OF_BLENDMODE_ALPHA);
+      ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 1.0));
+      foregroundFbo.draw(0, 0, Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT);
+    }
+    
+    // foreground lines
+    {
+      ofEnableBlendMode(OF_BLENDMODE_ALPHA);
+      ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 1.0));
+      foregroundLinesFbo.draw(0, 0, Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT);
+    }
+    
+    ofPopStyle();
   }
   
   // introspection
   {
     TS_START("draw-introspection");
+    ofPushStyle();
     ofPushView();
     ofEnableBlendMode(OF_BLENDMODE_ALPHA);
     ofScale(Constants::WINDOW_WIDTH); // drawing on Introspection is normalised so scale up
     introspection.draw();
     ofPopView();
+    ofPopStyle();
     TS_STOP("draw-introspection");
   }
   
   // audio analysis graphs
   {
+    ofPushStyle();
     ofPushView();
     ofEnableBlendMode(OF_BLENDMODE_ADD);
     float plotHeight = ofGetWindowHeight() / 4.0;
     audioDataPlotsPtr->drawPlots(ofGetWindowWidth(), plotHeight);
     audioDataSpectrumPlotsPtr->draw();
     ofPopView();
+    ofPopStyle();
   }
-
-  ofPopStyle();
 
   // gui
   if (guiVisible) gui.draw();
