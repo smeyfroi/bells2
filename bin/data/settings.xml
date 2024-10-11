@@ -3,7 +3,7 @@
 	<Fluid_Simulation>
 		<dt>0.03</dt>
 		<vorticity>15</vorticity>
-		<value:dissipation>0.9975</value:dissipation>
+		<value:dissipation>0.99602</value:dissipation>
 		<velocity:dissipation>0.9999</velocity:dissipation>
 		<temperature:dissipation>0.996</temperature:dissipation>
 		<pressure:iterations>22</pressure:iterations>
@@ -15,8 +15,38 @@
 			<gravityForceY>-0.98</gravityForceY>
 		</Bouyancy>
 	</Fluid_Simulation>
-	<clusterCentres>12</clusterCentres>
+	<clusterCentres>18</clusterCentres>
 	<validLowerRms>2917.5</validLowerRms>
 	<validLowerPitch>50</validLowerPitch>
 	<validUpperPitch>5000</validUpperPitch>
+	<audio>
+		<validLowerRms>300</validLowerRms>
+		<validLowerPitch>50</validLowerPitch>
+		<validUpperPitch>5000</validUpperPitch>
+		<minPitch>200</minPitch>
+		<maxPitch>1800</maxPitch>
+		<minRMS>0</minRMS>
+		<maxRMS>4600</maxRMS>
+		<minSpectralKurtosis>0</minSpectralKurtosis>
+		<maxSpectralKurtosis>25</maxSpectralKurtosis>
+		<minCentroidKurtosis>0.4</minCentroidKurtosis>
+		<maxCentroidKurtosis>6</maxCentroidKurtosis>
+	</audio>
+	<cluster>
+		<clusterCentres>12</clusterCentres>
+		<clusterSourceSamplesMax>3000</clusterSourceSamplesMax>
+		<clusterDecayRate>0.3</clusterDecayRate>
+		<sameClusterTolerance>0.1</sameClusterTolerance>
+		<sampleNoteClusters>7</sampleNoteClusters>
+		<sampleNotes>7</sampleNotes>
+	</cluster>
+	<fade>
+		<fadeCrystals>0.00302041</fadeCrystals>
+		<fadeDivisions>0.06</fadeDivisions>
+		<fadeForeground>0.005</fadeForeground>
+	</fade>
+	<impulse>
+		<impulseRadius>0.085</impulseRadius>
+		<impulseRadialVelocity>0.0003</impulseRadialVelocity>
+	</impulse>
 </group>

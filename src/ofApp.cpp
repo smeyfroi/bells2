@@ -26,18 +26,47 @@ void ofApp::setup(){
   
   fluidSimulation.setup({ Constants::FLUID_WIDTH, Constants::FLUID_HEIGHT });
   
-  foregroundLinesFbo.allocate(Constants::CANVAS_WIDTH, Constants::CANVAS_HEIGHT, GL_RGBA32F);
-  foregroundLinesFbo.clearColorBuffer(ofFloatColor(0.0, 0.0, 0.0, 0.0));
+  divisionsFbo.allocate(Constants::CANVAS_WIDTH, Constants::CANVAS_HEIGHT, GL_RGBA); // GL_RGBA32F); // 8 bit for ghosts of past lines
+  divisionsFbo.clearColorBuffer(ofFloatColor(0.0, 0.0, 0.0, 0.0));
+  
   foregroundFbo.allocate(Constants::CANVAS_WIDTH, Constants::CANVAS_HEIGHT, GL_RGBA32F);
   foregroundFbo.clearColorBuffer(ofFloatColor(0.0, 0.0, 0.0, 0.0));
-  foregroundMaskFbo.allocate(Constants::CANVAS_WIDTH, Constants::CANVAS_HEIGHT, GL_R8);
-  maskShader.load();
-
-  parameters.add(clusterCentresParameter);
-  parameters.add(validLowerRmsParameter);
-  parameters.add(validLowerPitchParameter);
-  parameters.add(validUpperPitchParameter);
   
+  crystalFbo.allocate(Constants::CANVAS_WIDTH, Constants::CANVAS_HEIGHT, GL_RGBA);
+  crystalFbo.clearColorBuffer(ofFloatColor(0.0, 0.0, 0.0, 0.0));
+  crystalMaskFbo.allocate(Constants::CANVAS_WIDTH, Constants::CANVAS_HEIGHT, GL_R8);
+  maskShader.load();
+  
+  audioParameters.add(validLowerRmsParameter);
+  audioParameters.add(validLowerPitchParameter);
+  audioParameters.add(validUpperPitchParameter);
+  audioParameters.add(minPitchParameter);
+  audioParameters.add(maxPitchParameter);
+  audioParameters.add(minRMSParameter);
+  audioParameters.add(maxRMSParameter);
+  audioParameters.add(minSpectralKurtosisParameter);
+  audioParameters.add(maxSpectralKurtosisParameter);
+  audioParameters.add(minSpectralCentroidParameter);
+  audioParameters.add(maxSpectralCentroidParameter);
+  parameters.add(audioParameters);
+
+  clusterParameters.add(clusterCentresParameter);
+  clusterParameters.add(clusterSourceSamplesMaxParameter);
+  clusterParameters.add(clusterDecayRateParameter);
+  clusterParameters.add(sameClusterToleranceParameter);
+  clusterParameters.add(sampleNoteClustersParameter);
+  clusterParameters.add(sampleNotesParameter);
+  parameters.add(clusterParameters);
+  
+  fadeParameters.add(fadeCrystalsParameter);
+  fadeParameters.add(fadeDivisionsParameter);
+  fadeParameters.add(fadeForegroundParameter);
+  parameters.add(fadeParameters);
+  
+  impulseParameters.add(impulseRadiusParameter);
+  impulseParameters.add(impulseRadialVelocityParameter);
+  parameters.add(impulseParameters);
+
   auto fluidParameterGroup = fluidSimulation.getParameterGroup();
   fluidParameterGroup.getFloat("dt").set(0.03);
   fluidParameterGroup.getFloat("vorticity").set(15.0);
@@ -54,10 +83,6 @@ void ofApp::setup(){
 }
 
 //--------------------------------------------------------------
-const int CLUSTER_SOURCE_SAMPLES_MAX = 3000; // Note: 1600 raw samples per frame at 30fps
-const float POINT_DECAY_RATE = 0.3;
-const float SAME_CLUSTER_TOLERANCE = 1.0/10.0;
-
 void ofApp::update() {
   TS_START("update-introspection");
   introspection.update();
@@ -67,24 +92,31 @@ void ofApp::update() {
   audioDataProcessorPtr->update();
   TS_STOP("update-audoanalysis");
 
-  // fade foreground lines
-  foregroundLinesFbo.begin();
+  // fade crystals
+  crystalFbo.begin();
   ofEnableBlendMode(OF_BLENDMODE_ALPHA);
-  ofSetColor(ofFloatColor(0.0, 0.0, 0.0, 0.07));
-  ofDrawRectangle(0.0, 0.0, foregroundLinesFbo.getWidth(), foregroundLinesFbo.getHeight());
-  foregroundLinesFbo.end();
+  ofSetColor(ofFloatColor(0.0, 0.0, 0.0, fadeCrystalsParameter));
+  ofDrawRectangle(0.0, 0.0, crystalFbo.getWidth(), crystalFbo.getHeight());
+  crystalFbo.end();
+
+  // fade division lines
+  divisionsFbo.begin();
+  ofEnableBlendMode(OF_BLENDMODE_ALPHA);
+  ofSetColor(ofFloatColor(0.0, 0.0, 0.0, fadeDivisionsParameter));
+  ofDrawRectangle(0.0, 0.0, divisionsFbo.getWidth(), divisionsFbo.getHeight());
+  divisionsFbo.end();
 
   // fade foreground
   foregroundFbo.begin();
   ofEnableBlendMode(OF_BLENDMODE_ALPHA);
-  ofSetColor(ofFloatColor(0.0, 0.0, 0.0, 0.005));
+  ofSetColor(ofFloatColor(0.0, 0.0, 0.0, fadeForegroundParameter));
   ofDrawRectangle(0.0, 0.0, foregroundFbo.getWidth(), foregroundFbo.getHeight());
   foregroundFbo.end();
 
-  float s = audioDataProcessorPtr->getNormalisedScalarValue(ofxAudioAnalysisClient::AnalysisScalar::pitch, 200.0, 1800.0);// 700.0, 1300.0);
-  float t = audioDataProcessorPtr->getNormalisedScalarValue(ofxAudioAnalysisClient::AnalysisScalar::rootMeanSquare, 0.0, 4600.0); ////400.0, 4000.0, false);
-  float u = audioDataProcessorPtr->getNormalisedScalarValue(ofxAudioAnalysisClient::AnalysisScalar::spectralKurtosis, 0.0, 25.0);
-  float v = audioDataProcessorPtr->getNormalisedScalarValue(ofxAudioAnalysisClient::AnalysisScalar::spectralCentroid, 0.4, 6.0);
+  float s = audioDataProcessorPtr->getNormalisedScalarValue(ofxAudioAnalysisClient::AnalysisScalar::pitch, minPitchParameter, maxPitchParameter);// 700.0, 1300.0);
+  float t = audioDataProcessorPtr->getNormalisedScalarValue(ofxAudioAnalysisClient::AnalysisScalar::rootMeanSquare, minRMSParameter, maxRMSParameter); ////400.0, 4000.0, false);
+  float u = audioDataProcessorPtr->getNormalisedScalarValue(ofxAudioAnalysisClient::AnalysisScalar::spectralKurtosis, minSpectralKurtosisParameter, maxSpectralKurtosisParameter);
+  float v = audioDataProcessorPtr->getNormalisedScalarValue(ofxAudioAnalysisClient::AnalysisScalar::spectralCentroid, minSpectralCentroidParameter, maxSpectralCentroidParameter);
   
   std::vector<ofxAudioData::ValiditySpec> sampleValiditySpecs {
     {ofxAudioAnalysisClient::AnalysisScalar::rootMeanSquare, false, validLowerRmsParameter},
@@ -122,8 +154,8 @@ void ofApp::update() {
     fluidSimulation.getFlowValuesFbo().getSource().end();
 
     // Maintain recent notes
-    if (recentNoteXYs.size() > CLUSTER_SOURCE_SAMPLES_MAX) {
-      recentNoteXYs.erase(recentNoteXYs.end() - CLUSTER_SOURCE_SAMPLES_MAX, recentNoteXYs.end());
+    if (recentNoteXYs.size() > clusterSourceSamplesMaxParameter) {
+      recentNoteXYs.erase(recentNoteXYs.end() - clusterSourceSamplesMaxParameter, recentNoteXYs.end());
     }
     recentNoteXYs.push_back({ s, t });
     introspection.addCircle(s, t, 1.0/Constants::WINDOW_WIDTH*5.0, ofColor::grey, true, 30); // introspection: small grey circle for new raw source sample
@@ -140,12 +172,12 @@ void ofApp::update() {
     {
       // glm::vec4 w is age
       // add to clusterCentres from new clusters
-      for (auto& cluster : std::get<0>(clusterResults)) {
+      for (const auto& cluster : std::get<0>(clusterResults)) {
         float x = cluster[0]; float y = cluster[1];
         auto it = std::find_if(clusterCentres.begin(),
                                clusterCentres.end(),
-                               [x, y](const glm::vec4& p) {
-          return ((std::abs(p.x-x) < SAME_CLUSTER_TOLERANCE) && (std::abs(p.y-y) < SAME_CLUSTER_TOLERANCE));
+                               [x, y, this](const glm::vec4& p) {
+          return ((std::abs(p.x-x) < sameClusterToleranceParameter) && (std::abs(p.y-y) < sameClusterToleranceParameter));
         });
         if (it == clusterCentres.end()) {
           // don't have this clusterCentre so make it
@@ -165,7 +197,7 @@ void ofApp::update() {
     if (recentNoteXYs.size() > 70) {
       
       // find some number of note clusters
-      for (int i = 0; i < 7; i++) {
+      for (int i = 0; i < sampleNoteClustersParameter; i++) {
         
         std::vector<uint32_t> sameClusterNoteIds; // collect note IDs all from the same cluster
         size_t id = ofRandom(recentNoteXYIds.size()); // start with a random note TODO: don't use ofRandom
@@ -173,7 +205,7 @@ void ofApp::update() {
         uint32_t clusterId = recentNoteXYIds[id];
         
         // pick a number of additional random notes and keep if from this cluster
-        for(int i = 0; i < 17; i++) {
+        for(int i = 0; i < sampleNotesParameter; i++) {
           id = ofRandom(recentNoteXYIds.size());
           if (recentNoteXYIds[id] == clusterId) {
             sameClusterNoteIds.push_back(id);
@@ -192,7 +224,19 @@ void ofApp::update() {
           }
           path.close();
 
-          // paint into the fluid layer
+          // find normalised path bounds
+          ofRectangle pathBounds;
+          for (const auto& polyline : path.getOutline()) {
+            pathBounds = pathBounds.getUnion(polyline.getBoundingBox());
+          }
+          
+          // scale up to some limit to fill mask with a reduced view of some part of the frozen fluid
+          constexpr float MAX_SCALE = 2.0;
+          float scaleX = std::fminf(MAX_SCALE, 1.0 / pathBounds.width);
+          float scaleY = std::fminf(MAX_SCALE, 1.0 / pathBounds.height);
+          float scale = std::fminf(scaleX, scaleY);
+
+          // paint path into the fluid layer
           fluidSimulation.getFlowValuesFbo().getSource().begin();
           {
             ofPath fluidPath = path;
@@ -205,57 +249,39 @@ void ofApp::update() {
             fluidPath.draw();
           }
           fluidSimulation.getFlowValuesFbo().getSource().end();
-
-          // find normalised path bounds
-          ofRectangle pathBounds;
-          for (const auto& polyline : path.getOutline()) {
-            pathBounds = pathBounds.getUnion(polyline.getBoundingBox());
-          }
-
-          // translate it to start from (0, 0)
-          path.translate({ -pathBounds.x, -pathBounds.y });
           
-          // scale up to some limit
-          constexpr float MAX_SCALE = 3.0;
-          float scaleX = std::fminf(MAX_SCALE, 1.0 / pathBounds.width);
-          float scaleY = std::fminf(MAX_SCALE, 1.0 / pathBounds.height);
-          float scale = std::fminf(scaleX, scaleY);
-          path.scale(scale, scale);
-          
-          // and make a mask from the path
-          foregroundMaskFbo.begin();
-          {
-            ofClear(0, 255);
-            ofSetColor(255);
-            path.setFilled(true);
-            ofPushMatrix();
-            ofScale(foregroundMaskFbo.getWidth(), foregroundMaskFbo.getHeight()); // from normalised to FBO size
-            path.draw();
-            ofPopMatrix();
-          }
-          foregroundMaskFbo.end();
-
-          // draw a reduced version of the foreground into the mask
           if (frozenFluid.isAllocated()) {
-            foregroundFbo.begin();
+
+            // make a mask texture
+            crystalMaskFbo.begin();
+            {
+              ofPath maskPath = path;
+              ofEnableBlendMode(OF_BLENDMODE_DISABLED);
+              ofClear(0, 255);
+              ofSetColor(255);
+              maskPath.setFilled(true);
+              maskPath.scale(crystalMaskFbo.getWidth(), crystalMaskFbo.getHeight());
+              maskPath.draw();
+            }
+            crystalMaskFbo.end();
+            
+            // draw a reduced SOM-tinted version of the frozen fluid into the crystal layer through the mask
+            crystalFbo.begin();
             {
               ofEnableBlendMode(OF_BLENDMODE_ADD);
-              ofSetColor(216);
-//              ofSetColor(255, 0, 0, 255);
-              ofPushMatrix();
-              ofScale(1.0 / scale, 1.0 / scale); // TODO: scale needs to take into account the fluid scaling
-              ofTranslate(pathBounds.x * foregroundFbo.getWidth(), pathBounds.y * foregroundFbo.getHeight());
-//              foregroundMaskFbo.draw(0, 0);
-              maskShader.render(frozenFluid, foregroundMaskFbo, foregroundFbo.getWidth(), foregroundFbo.getHeight());
-              ofPopMatrix();
+//              ofFloatColor fragmentColor = somColorAt(pathBounds.x, pathBounds.y);
+//              fragmentColor.a = 0.2;
+//              ofSetColor(fragmentColor*0.2);
+              ofSetColor(128);
+              maskShader.render(frozenFluid, crystalMaskFbo, crystalFbo.getWidth(), crystalFbo.getHeight(), false, {pathBounds.x+pathBounds.width/2.0, pathBounds.y+pathBounds.height/2.0}, {scale, scale});
             }
-            foregroundFbo.end();
+            crystalFbo.end();
           }
           
           // draw extended outlines in the foreground (saving them for redrawing into fluid)
           std::vector<std::tuple<glm::vec2, glm::vec2>> extendedLines;
-          float width = 15 * 1.0 / foregroundLinesFbo.getWidth();
-          foregroundLinesFbo.begin();
+          float width = 8 * 1.0 / divisionsFbo.getWidth();
+          divisionsFbo.begin();
           ofEnableBlendMode(OF_BLENDMODE_ALPHA);
           ofSetColor(ofColor::black);
           ofPushMatrix();
@@ -285,7 +311,7 @@ void ofApp::update() {
             }
           }
           ofPopMatrix();
-          foregroundLinesFbo.end();
+          divisionsFbo.end();
           
           // plot connected clustered notes
           {
@@ -311,7 +337,8 @@ void ofApp::update() {
           // redraw extended lines into the fluid layer
           fluidSimulation.getFlowValuesFbo().getSource().begin();
           ofEnableBlendMode(OF_BLENDMODE_ALPHA);
-          ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 0.7));
+//          ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 0.7));
+          ofSetColor(ofFloatColor(0.0, 0.0, 0.0, 0.3));
           ofPushMatrix();
           ofScale(Constants::FLUID_WIDTH, Constants::FLUID_HEIGHT);
           {
@@ -369,7 +396,7 @@ void ofApp::update() {
     TS_START("decay-clusterCentres");
     // age all clusterCentres
     for (auto& p: clusterCentres) {
-      p.w -= POINT_DECAY_RATE;
+      p.w -= clusterDecayRateParameter;
       if (p.w > 5.0) {
         introspection.addCircle(p.x, p.y, 10.0*1.0/Constants::WINDOW_WIDTH, ofColor::lightGreen, true, 60); // large lightGreen circle is long-lived clusterCentre
       } else {
@@ -386,16 +413,16 @@ void ofApp::update() {
   
   // draw divisions on foreground
   {
-    foregroundLinesFbo.begin();
+    divisionsFbo.begin();
     ofSetColor(ofFloatColor(0.0, 0.0, 0.0, 1.0));
     ofPushMatrix();
-    ofScale(foregroundLinesFbo.getWidth(), foregroundLinesFbo.getHeight());
-    const float lineWidth = 80.0 * 1.0 / foregroundLinesFbo.getWidth();
+    ofScale(divisionsFbo.getWidth(), divisionsFbo.getHeight());
+    const float lineWidth = 80.0 * 1.0 / divisionsFbo.getWidth();
     for(auto& divisionLine : divider.getDivisionLines()) {
       divisionLine.draw(lineWidth);
     }
     ofPopMatrix();
-    foregroundLinesFbo.end();
+    divisionsFbo.end();
   }
 
   // draw arcs around longer-lasting clusterCentres into foreground
@@ -447,9 +474,9 @@ void ofApp::update() {
       color.a = 0.005 * ofRandom(1.0);
       FluidSimulation::Impulse impulse {
         { x * Constants::FLUID_WIDTH, y * Constants::FLUID_HEIGHT },
-        Constants::FLUID_WIDTH * 0.085, // radius
+        Constants::FLUID_WIDTH * impulseRadiusParameter,
         { 0.0, 0.0 }, // velocity
-        0.0003, // radialVelocity
+        impulseRadialVelocityParameter,
         color,
         1.0 // temperature
       };
@@ -475,11 +502,12 @@ void ofApp::draw() {
     
   } else {
     ofPushStyle();
-    ofClear(0, 255);
+    
+//    ofClear(0, 255);
     
     // fluid
     {
-      ofEnableBlendMode(OF_BLENDMODE_ALPHA);
+      ofEnableBlendMode(OF_BLENDMODE_DISABLED);
       ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 1.0));
       fluidSimulation.getFlowValuesFbo().getSource().draw(0.0, 0.0, Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT);
     }
@@ -491,13 +519,20 @@ void ofApp::draw() {
       foregroundFbo.draw(0, 0, Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT);
     }
     
-    // foreground lines
+    // divisions
     {
       ofEnableBlendMode(OF_BLENDMODE_ALPHA);
       ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 1.0));
-      foregroundLinesFbo.draw(0, 0, Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT);
+      divisionsFbo.draw(0, 0, Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT);
     }
     
+    // crystals
+    {
+      ofEnableBlendMode(OF_BLENDMODE_ADD);
+      ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 1.0));
+      crystalFbo.draw(0, 0, Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT);
+    }
+
     ofPopStyle();
   }
   
@@ -552,11 +587,11 @@ void ofApp::keyPressed(int key){
     compositeFbo.begin();
     {
       // blackground
-      ofClear(0, 255);
+//      ofClear(0, 255);
 
       // fluid
       {
-        ofEnableBlendMode(OF_BLENDMODE_ALPHA);
+        ofEnableBlendMode(OF_BLENDMODE_DISABLED);
         ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 1.0));
         fluidSimulation.getFlowValuesFbo().getSource().draw(0.0, 0.0, Constants::CANVAS_WIDTH, Constants::CANVAS_HEIGHT);
       }
@@ -568,11 +603,18 @@ void ofApp::keyPressed(int key){
         foregroundFbo.draw(0, 0, Constants::CANVAS_WIDTH, Constants::CANVAS_HEIGHT);
       }
       
-      // foreground lines
+      // divisions
       {
         ofEnableBlendMode(OF_BLENDMODE_ALPHA);
         ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 1.0));
-        foregroundLinesFbo.draw(0, 0, Constants::CANVAS_WIDTH, Constants::CANVAS_HEIGHT);
+        divisionsFbo.draw(0, 0, Constants::CANVAS_WIDTH, Constants::CANVAS_HEIGHT);
+      }
+      
+      // crystals
+      {
+        ofEnableBlendMode(OF_BLENDMODE_ADD);
+        ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 1.0));
+        crystalFbo.draw(0, 0, Constants::CANVAS_WIDTH, Constants::CANVAS_HEIGHT);
       }
     }
     compositeFbo.end();
