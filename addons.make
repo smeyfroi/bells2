@@ -4,6 +4,7 @@ ofxHistoryPlot
 ofxAudioAnalysisClient
 ofxAudioData
 ofxGui
+ofxIntrospector
 ofxRenderer
 ofxSelfOrganizingMap
 ofxTimeMeasurements

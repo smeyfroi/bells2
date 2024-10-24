@@ -6,10 +6,10 @@
 #include "ofxAudioAnalysisClient.h"
 #include "ofxAudioData.h"
 #include "FluidSimulation.h"
-#include "Introspection.hpp"
 #include "Divider.hpp"
 #include "MaskShader.h"
 #include "Plot.hpp"
+#include "ofxIntrospector.h"
 
 class ofApp : public ofBaseApp{
   
@@ -76,7 +76,7 @@ private:
   Plot plot;
   bool plotVisible;
   
-  Introspection introspection; // add things to this in normalised coords
+  Introspector introspector; // add things to this in normalised coords
   
   bool guiVisible { false };
   ofxPanel gui;

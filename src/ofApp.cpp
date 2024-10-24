@@ -1,6 +1,5 @@
 #include "ofApp.h"
 #include "Constants.h"
-#include "Introspection.hpp"
 #include "ofxTimeMeasurements.h"
 #include "dkm.hpp"
 
@@ -85,7 +84,7 @@ void ofApp::setup(){
 //--------------------------------------------------------------
 void ofApp::update() {
   TS_START("update-introspection");
-  introspection.update();
+  introspector.update();
   TS_STOP("update-introspection");
 
   TS_START("update-audoanalysis");
@@ -158,7 +157,7 @@ void ofApp::update() {
       recentNoteXYs.erase(recentNoteXYs.end() - clusterSourceSamplesMaxParameter, recentNoteXYs.end());
     }
     recentNoteXYs.push_back({ s, t });
-    introspection.addCircle(s, t, 1.0/Constants::WINDOW_WIDTH*5.0, ofColor::grey, true, 30); // introspection: small grey circle for new raw source sample
+    introspector.addCircle(s, t, 1.0/Constants::WINDOW_WIDTH*5.0, ofColor::grey, true, 30); // introspection: small grey circle for new raw source sample
 
     TS_START("update-kmeans");
     if (recentNoteXYs.size() > clusterCentresParameter) {
@@ -398,9 +397,9 @@ void ofApp::update() {
     for (auto& p: clusterCentres) {
       p.w -= clusterDecayRateParameter;
       if (p.w > 5.0) {
-        introspection.addCircle(p.x, p.y, 10.0*1.0/Constants::WINDOW_WIDTH, ofColor::lightGreen, true, 60); // large lightGreen circle is long-lived clusterCentre
+        introspector.addCircle(p.x, p.y, 10.0*1.0/Constants::WINDOW_WIDTH, ofColor::lightGreen, true, 60); // large lightGreen circle is long-lived clusterCentre
       } else {
-        introspection.addCircle(p.x, p.y, 6.0*1.0/Constants::WINDOW_WIDTH, ofColor::darkOrange, true, 30); // small darkOrange circle is short-lived clusterCentre
+        introspector.addCircle(p.x, p.y, 6.0*1.0/Constants::WINDOW_WIDTH, ofColor::darkOrange, true, 30); // small darkOrange circle is short-lived clusterCentre
       }
     }
     // delete decayed clusterCentres
@@ -543,7 +542,7 @@ void ofApp::draw() {
     ofPushView();
     ofEnableBlendMode(OF_BLENDMODE_ALPHA);
     ofScale(Constants::WINDOW_WIDTH); // drawing on Introspection is normalised so scale up
-    introspection.draw();
+    introspector.draw();
     ofPopView();
     ofPopStyle();
     TS_STOP("draw-introspection");
@@ -580,7 +579,7 @@ void ofApp::keyPressed(int key){
     bool spectrumPlotKeyPressed = audioDataSpectrumPlotsPtr->keyPressed(key);
     if (plotKeyPressed || spectrumPlotKeyPressed) return;
   }
-  if (introspection.keyPressed(key)) return;
+  if (introspector.keyPressed(key)) return;
   if (key == 'S') {
     ofFbo compositeFbo;
     compositeFbo.allocate(Constants::CANVAS_WIDTH, Constants::CANVAS_HEIGHT, GL_RGB);
