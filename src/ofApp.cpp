@@ -1,5 +1,4 @@
 #include "ofApp.h"
-#include "Constants.h"
 #include "ofxTimeMeasurements.h"
 #include "dkm.hpp"
 
@@ -489,10 +488,7 @@ ofFloatColor ofApp::somColorAt(float x, float y) const {
 void ofApp::draw() {
   if (plot.visible) {
     ofClear(255, 255);
-    ofPushMatrix();
-    ofScale(Constants::WINDOW_WIDTH); // drawing on Introspection is normalised so scale up
     plot.draw();
-    ofPopMatrix();
     
   } else {
     ofPushStyle();

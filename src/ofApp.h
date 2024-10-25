@@ -10,6 +10,7 @@
 #include "MaskShader.h"
 #include "ofxIntrospector.h"
 #include "ofxPlottable.h"
+#include "Constants.h"
 
 class ofApp : public ofBaseApp{
   
@@ -73,7 +74,7 @@ private:
   
   Divider divider { 7 };
   
-  Plottable plot;
+  Plottable plot { Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT }; // We draw in normalised coords so scale up for drawing and saving into a window-shaped viewport
   
   Introspector introspector; // add things to this in normalised coords
   
