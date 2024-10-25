@@ -75,8 +75,6 @@ void ofApp::setup(){
   parameters.add(fluidParameterGroup);
   
   gui.setup(parameters);
-  
-  plotVisible = false;
 
   ofxTimeMeasurements::instance()->setEnabled(false);
 }
@@ -318,8 +316,7 @@ void ofApp::update() {
             auto lastNote = recentNoteXYs[lastNoteId];
             for (uint32_t id : sameClusterNoteIds) {
               const auto& note = recentNoteXYs[id];
-              auto linePtr = std::unique_ptr<Shape>(new LineShape(lastNote[0], lastNote[1], note[0], note[1], ofColor::red, 50));
-              plot.addShapePtr(std::move(linePtr));
+              plot.addLine(lastNote[0], lastNote[1], note[0], note[1], ofColor::red, 50);
               lastNote = note;
             }
           }
@@ -328,8 +325,7 @@ void ofApp::update() {
           {
             for (const auto& line : extendedLines) {
               glm::vec2 p1 = std::get<0>(line); glm::vec2 p2 = std::get<1>(line);
-              auto linePtr = std::unique_ptr<Shape>(new LineShape(p1.x, p1.y, p2.x, p2.y, ofColor::green, 20));
-              plot.addShapePtr(std::move(linePtr));
+              plot.addLine(p1.x, p1.y, p2.x, p2.y, ofColor::green, 20);
             }
           }
           
@@ -448,16 +444,14 @@ void ofApp::update() {
     for (auto& p: clusterCentres) {
       if (p.w < 4.0) continue;
       float radius = std::fmod(p.w*5.0/Constants::CANVAS_WIDTH, 480.0/Constants::CANVAS_WIDTH);
-      auto arcPtr = std::unique_ptr<Shape>(new ArcShape(p.x, p.y, radius, -180.0*(u+p.x), 180.0*(v+p.y), ofColor::blue, 30));
-      plot.addShapePtr(std::move(arcPtr));
+      plot.addArc(p.x, p.y, radius, -180.0*(u+p.x), 180.0*(v+p.y), ofColor::blue, 30);
     }
   }
   
   // plot divisions
   {
     for(auto& l : divider.getDivisionLines()) {
-      auto linePtr = std::unique_ptr<Shape>(new LineShape(l.x1, l.y1, l.x2, l.y2, ofColor::black, 10));
-      plot.addShapePtr(std::move(linePtr));
+      plot.addLine(l.x1, l.y1, l.x2, l.y2, ofColor::black, 10);
     }
   }
 
@@ -493,10 +487,11 @@ ofFloatColor ofApp::somColorAt(float x, float y) const {
 
 //--------------------------------------------------------------
 void ofApp::draw() {
-  if (plotVisible) {
+  if (plot.visible) {
     ofClear(255, 255);
     ofPushMatrix();
-    plot.draw(ofGetWindowWidth());
+    ofScale(Constants::WINDOW_WIDTH); // drawing on Introspection is normalised so scale up
+    plot.draw();
     ofPopMatrix();
     
   } else {
@@ -580,6 +575,7 @@ void ofApp::keyPressed(int key){
     if (plotKeyPressed || spectrumPlotKeyPressed) return;
   }
   if (introspector.keyPressed(key)) return;
+  if (plot.keyPressed(key)) return;
   if (key == 'S') {
     ofFbo compositeFbo;
     compositeFbo.allocate(Constants::CANVAS_WIDTH, Constants::CANVAS_HEIGHT, GL_RGB);
@@ -620,13 +616,6 @@ void ofApp::keyPressed(int key){
     ofPixels pixels;
     compositeFbo.readToPixels(pixels);
     ofSaveImage(pixels, ofFilePath::getUserHomeDir()+"/Documents/bells2/snapshot-"+ofGetTimestampString()+".png", OF_IMAGE_QUALITY_BEST);
-  }
-  if (key == 'v') {
-    plotVisible = !plotVisible;
-    return;
-  }
-  if (key == 'V') {
-    plot.save(ofGetWindowWidth(), ofFilePath::getUserHomeDir()+"/Documents/bells2/plot-"+ofGetTimestampString()+".svg");
   }
 }
 

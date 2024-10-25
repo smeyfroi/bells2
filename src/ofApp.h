@@ -8,8 +8,8 @@
 #include "FluidSimulation.h"
 #include "Divider.hpp"
 #include "MaskShader.h"
-#include "Plot.hpp"
 #include "ofxIntrospector.h"
+#include "ofxPlottable.h"
 
 class ofApp : public ofBaseApp{
   
@@ -73,8 +73,7 @@ private:
   
   Divider divider { 7 };
   
-  Plot plot;
-  bool plotVisible;
+  Plottable plot;
   
   Introspector introspector; // add things to this in normalised coords
   

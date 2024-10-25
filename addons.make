@@ -5,6 +5,7 @@ ofxAudioAnalysisClient
 ofxAudioData
 ofxGui
 ofxIntrospector
+ofxPlottable
 ofxRenderer
 ofxSelfOrganizingMap
 ofxTimeMeasurements
