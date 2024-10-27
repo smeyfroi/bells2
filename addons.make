@@ -3,6 +3,7 @@ ofxOsc
 ofxHistoryPlot
 ofxAudioAnalysisClient
 ofxAudioData
+ofxDividedArea
 ofxGui
 ofxIntrospector
 ofxPlottable

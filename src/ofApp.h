@@ -6,11 +6,11 @@
 #include "ofxAudioAnalysisClient.h"
 #include "ofxAudioData.h"
 #include "FluidSimulation.h"
-#include "Divider.hpp"
 #include "MaskShader.h"
 #include "ofxIntrospector.h"
 #include "ofxPlottable.h"
 #include "Constants.h"
+#include "ofxDividedArea.h"
 
 class ofApp : public ofBaseApp{
   
@@ -67,12 +67,11 @@ private:
   MaskShader maskShader;
   
   ofFbo divisionsFbo;
+  DividedArea dividedArea { {1.0, 1.0}, 7 };
 
   std::vector<std::array<float, 2>> recentNoteXYs;
   std::tuple<std::vector<std::array<float, 2>>, std::vector<uint32_t>> clusterResults;
   std::vector<glm::vec4> clusterCentres;
-  
-  Divider divider { 7 };
   
   Plottable plot { Constants::WINDOW_WIDTH, Constants::WINDOW_HEIGHT }; // We draw in normalised coords so scale up for drawing and saving into a window-shaped viewport
   

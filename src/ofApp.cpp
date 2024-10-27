@@ -275,7 +275,7 @@ void ofApp::update() {
           }
           
           // draw extended outlines in the foreground (saving them for redrawing into fluid)
-          std::vector<std::tuple<glm::vec2, glm::vec2>> extendedLines;
+          std::vector<DividerLine> extendedLines;
           float width = 8 * 1.0 / divisionsFbo.getWidth();
           divisionsFbo.begin();
           ofEnableBlendMode(OF_BLENDMODE_ALPHA);
@@ -296,9 +296,9 @@ void ofApp::update() {
               const auto& note2 = recentNoteXYs[id2];
               float x2 = note2[0]; float y2 = note2[1];
               if (note1 == note2) continue;
-              auto line = divider.extendedLineEnclosedByDivider(x1, y1, x2, y2);
+              DividerLine line = dividedArea.createConstrainedDividerLine({x1, y1}, {x2, y2});
               extendedLines.push_back(line);
-              glm::vec2 p1 = std::get<0>(line); glm::vec2 p2 = std::get<1>(line);
+              glm::vec2 p1 = line.start; glm::vec2 p2 = line.end;
               ofPushMatrix();
               ofTranslate(p1.x, p1.y);
               ofRotateRad(std::atan2((p2.y-p1.y), (p2.x-p1.x)));
@@ -323,7 +323,7 @@ void ofApp::update() {
           // plot extended lines
           {
             for (const auto& line : extendedLines) {
-              glm::vec2 p1 = std::get<0>(line); glm::vec2 p2 = std::get<1>(line);
+              glm::vec2 p1 = line.start; glm::vec2 p2 = line.end;
               plot.addLine(p1.x, p1.y, p2.x, p2.y, ofColor::green, 20);
             }
           }
@@ -338,7 +338,7 @@ void ofApp::update() {
           {
             float width = 1.0 * 1.0 / Constants::FLUID_WIDTH;
             for (const auto& line : extendedLines) {
-              glm::vec2 p1 = std::get<0>(line); glm::vec2 p2 = std::get<1>(line);
+              glm::vec2 p1 = line.start; glm::vec2 p2 = line.end;
               ofPushMatrix();
               ofTranslate(p1.x, p1.y);
               ofRotateRad(std::atan2((p2.y-p1.y), (p2.x-p1.x)));
@@ -364,23 +364,25 @@ void ofApp::update() {
     fluidSimulation.getFlowValuesFbo().getSource().end();
 
     TS_START("update-divider");
-    bool dividerChanged = divider.update(clusterCentres);
-    if (dividerChanged) {
-      fluidSimulation.getFlowValuesFbo().getSource().begin();
-      ofEnableBlendMode(OF_BLENDMODE_ALPHA);
-      ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 1.0));
-      ofPushMatrix();
-      ofScale(Constants::FLUID_WIDTH);
-      const float lineWidth = 1.0 * 1.0 / Constants::FLUID_WIDTH;
-      for(auto& divisionLine : divider.getDivisionLines()) {
-        divisionLine.draw(lineWidth);
+    if (clusterCentres.size() > 2) {
+      bool dividedAreaChanged = dividedArea.updateUnconstrainedDividerLines(clusterCentres, {(size_t)ofRandom(clusterCentres.size()), (size_t)ofRandom(clusterCentres.size())});
+      if (dividedAreaChanged) {
+        fluidSimulation.getFlowValuesFbo().getSource().begin();
+        {
+          ofEnableBlendMode(OF_BLENDMODE_ALPHA);
+          ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 1.0));
+          ofPushMatrix();
+          ofScale(Constants::FLUID_WIDTH);
+          const float lineWidth = 2.0 * 1.0 / Constants::FLUID_WIDTH;
+          dividedArea.draw(0.0, lineWidth, 0.0);
+          ofPopMatrix();
+        }
+        fluidSimulation.getFlowValuesFbo().getSource().end();
+        
+        ofPixels frozenPixels;
+        fluidSimulation.getFlowValuesFbo().getSource().getTexture().readToPixels(frozenPixels);
+        frozenFluid.allocate(frozenPixels);
       }
-      ofPopMatrix();
-      fluidSimulation.getFlowValuesFbo().getSource().end();
-
-      ofPixels frozenPixels;
-      fluidSimulation.getFlowValuesFbo().getSource().getTexture().readToPixels(frozenPixels);
-      frozenFluid.allocate(frozenPixels);
     }
     TS_STOP("update-divider");
     
@@ -412,9 +414,7 @@ void ofApp::update() {
     ofPushMatrix();
     ofScale(divisionsFbo.getWidth(), divisionsFbo.getHeight());
     const float lineWidth = 80.0 * 1.0 / divisionsFbo.getWidth();
-    for(auto& divisionLine : divider.getDivisionLines()) {
-      divisionLine.draw(lineWidth);
-    }
+    dividedArea.draw(0.0, lineWidth, 0.0);
     ofPopMatrix();
     divisionsFbo.end();
   }
@@ -449,8 +449,8 @@ void ofApp::update() {
   
   // plot divisions
   {
-    for(auto& l : divider.getDivisionLines()) {
-      plot.addLine(l.x1, l.y1, l.x2, l.y2, ofColor::black, 10);
+    for(auto& l : dividedArea.unconstrainedDividerLines) {
+      plot.addLine(l.start.x, l.start.y, l.end.x, l.end.y, ofColor::black, 10);
     }
   }
 
