@@ -66,7 +66,7 @@ void ofApp::setup(){
   parameters.add(impulseParameters);
 
   auto fluidParameterGroup = fluidSimulation.getParameterGroup();
-  fluidParameterGroup.getFloat("dt").set(0.03);
+  fluidParameterGroup.getFloat("dt").set(0.02);
   fluidParameterGroup.getFloat("vorticity").set(15.0);
   fluidParameterGroup.getFloat("value:dissipation").set(0.9975);
   fluidParameterGroup.getFloat("velocity:dissipation").set(0.9999);
@@ -151,10 +151,10 @@ void ofApp::update() {
 
     // Maintain recent notes
     if (recentNoteXYs.size() > clusterSourceSamplesMaxParameter) {
-      recentNoteXYs.erase(recentNoteXYs.end() - clusterSourceSamplesMaxParameter, recentNoteXYs.end());
+      recentNoteXYs.erase(recentNoteXYs.end() - clusterSourceSamplesMaxParameter/10, recentNoteXYs.end());
     }
     recentNoteXYs.push_back({ s, t });
-    introspector.addCircle(s, t, 1.0/Constants::WINDOW_WIDTH*5.0, ofColor::grey, true, 30); // introspection: small grey circle for new raw source sample
+    introspector.addCircle(s, t, 1.0/Constants::WINDOW_WIDTH*5.0, ofColor::yellow, true, 30); // introspection: small yellow circle for new raw source sample
 
     TS_START("update-kmeans");
     if (recentNoteXYs.size() > clusterCentresParameter) {
@@ -178,7 +178,7 @@ void ofApp::update() {
         if (it == clusterCentres.end()) {
           // don't have this clusterCentre so make it
           clusterCentres.push_back(glm::vec4(x, y, 0.0, 1.0)); // start at age=1
-//          introspection.addCircle(x, y, 5.0*1.0/Constants::WINDOW_WIDTH, ofColor::red, true, 60); // introspection: small red circle is new cluster centre
+          introspector.addCircle(x, y, 20.0*1.0/Constants::WINDOW_WIDTH, ofColor::red, true, 100); // introspection: large red circle is new cluster centre
         } else {
           // existing cluster so add to its age to preserve it
           it->w++;
@@ -370,10 +370,10 @@ void ofApp::update() {
         fluidSimulation.getFlowValuesFbo().getSource().begin();
         {
           ofEnableBlendMode(OF_BLENDMODE_ALPHA);
-          ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 1.0));
+          ofSetColor(ofFloatColor(1.0, 1.0, 1.0, 0.7));
           ofPushMatrix();
           ofScale(Constants::FLUID_WIDTH);
-          const float lineWidth = 2.0 * 1.0 / Constants::FLUID_WIDTH;
+          const float lineWidth = 0.5 * 1.0 / Constants::FLUID_WIDTH;
           dividedArea.draw(0.0, lineWidth, 0.0);
           ofPopMatrix();
         }
