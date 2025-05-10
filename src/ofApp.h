@@ -36,9 +36,9 @@ public:
 private:
 
   // bells
-    std::shared_ptr<ofxAudioAnalysisClient::FileClient> audioAnalysisClientPtr {
-      std::make_shared<ofxAudioAnalysisClient::FileClient>("Jam-20240517-155805463/____-80_41_155_x_22141-0-1.wav",
-                                                           "Jam-20240517-155805463/____-80_41_155_x_22141.oscs") };
+//    std::shared_ptr<ofxAudioAnalysisClient::FileClient> audioAnalysisClientPtr {
+//      std::make_shared<ofxAudioAnalysisClient::FileClient>("Jam-20240517-155805463/____-80_41_155_x_22141-0-1.wav",
+//                                                           "Jam-20240517-155805463/____-80_41_155_x_22141.oscs") };
 
   // nightsong
 //    std::shared_ptr<ofxAudioAnalysisClient::FileClient> audioAnalysisClientPtr {
@@ -46,9 +46,9 @@ private:
 //                                                           "Jam-20240402-094851837/____-46_137_90_x_22141.oscs") };
 
   // treganna
-//  std::shared_ptr<ofxAudioAnalysisClient::FileClient> audioAnalysisClientPtr {
-//    std::make_shared<ofxAudioAnalysisClient::FileClient>("Jam-20240719-093508910/____-92_9_186_x_22141-0-1.wav",
-//                                                         "Jam-20240719-093508910/____-92_9_186_x_22141.oscs") };
+  std::shared_ptr<ofxAudioAnalysisClient::FileClient> audioAnalysisClientPtr {
+    std::make_shared<ofxAudioAnalysisClient::FileClient>("Jam-20240719-093508910/____-92_9_186_x_22141-0-1.wav",
+                                                         "Jam-20240719-093508910/____-92_9_186_x_22141.oscs") };
 
   std::shared_ptr<ofxAudioData::Processor> audioDataProcessorPtr { std::make_shared<ofxAudioData::Processor>(audioAnalysisClientPtr) };
   std::shared_ptr<ofxAudioData::Plots> audioDataPlotsPtr { std::make_shared<ofxAudioData::Plots>(audioDataProcessorPtr) };
@@ -97,7 +97,7 @@ private:
   ofParameterGroup clusterParameters { "cluster" };
   ofParameter<int> clusterCentresParameter { "clusterCentres", 12, 2.0, 50.0 };
   ofParameter<int> clusterSourceSamplesMaxParameter { "clusterSourceSamplesMax", 3000, 1000, 8000 }; // Note: 1600 raw samples per frame at 30fps
-  ofParameter<float> clusterDecayRateParameter { "clusterDecayRate", 0.3, 0.0, 5.0 };
+  ofParameter<float> clusterDecayRateParameter { "clusterDecayRate", 1.1, 0.0, 5.0 };
   ofParameter<float> sameClusterToleranceParameter { "sameClusterTolerance", 0.1, 0.01, 1.0 };
   ofParameter<int> sampleNoteClustersParameter { "sampleNoteClusters", 7, 1, 20 };
   ofParameter<int> sampleNotesParameter { "sampleNotes", 7, 1, 20 };
